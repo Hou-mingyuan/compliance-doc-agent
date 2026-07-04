@@ -13,7 +13,7 @@ import com.portfolio.compliance.agent.tool.ToolResult;
 import com.portfolio.compliance.agent.tool.ToolSupport;
 import com.portfolio.compliance.llm.ToolSpec;
 import com.portfolio.compliance.rules.ComplianceRule;
-import com.portfolio.compliance.rules.RuleEngine;
+import com.portfolio.compliance.rules.ComplianceRuleEngine;
 import com.portfolio.compliance.rules.RuleSeverity;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,9 +45,9 @@ public final class ComplianceAgentToolStubs {
 
     public static final class CheckRulesTool implements AgentTool {
 
-        private final RuleEngine ruleEngine;
+        private final ComplianceRuleEngine ruleEngine;
 
-        public CheckRulesTool(RuleEngine ruleEngine) {
+        public CheckRulesTool(ComplianceRuleEngine ruleEngine) {
             this.ruleEngine = ruleEngine;
         }
 
@@ -322,7 +322,7 @@ public final class ComplianceAgentToolStubs {
     public static class Config {
 
         @Bean
-        AgentTool checkRulesTool(RuleEngine ruleEngine) {
+        AgentTool checkRulesTool(ComplianceRuleEngine ruleEngine) {
             return new CheckRulesTool(ruleEngine);
         }
 

@@ -8,6 +8,9 @@ import java.util.Locale;
 import java.util.Set;
 
 import com.portfolio.compliance.common.BizException;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,7 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Component
 public class DocumentParser {
 
-    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("txt", "md", "markdown");
+    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("txt", "md", "markdown", "pdf");
     private static final int MAX_BYTES = 5 * 1024 * 1024;
 
     public ParsedDocument parse(MultipartFile file) {
@@ -29,11 +32,11 @@ public class DocumentParser {
         String originalName = file.getOriginalFilename();
         String extension = extractExtension(originalName);
         if (!SUPPORTED_EXTENSIONS.contains(extension)) {
-            throw new BizException("暂仅支持 TXT / Markdown 文件（.txt / .md）");
+            throw new BizException("暂仅支持 PDF / TXT / Markdown 文件（.pdf / .txt / .md）");
         }
 
         try (InputStream in = file.getInputStream()) {
-            String content = readUtf8(in);
+            String content = parseContent(in, extension);
             if (!StringUtils.hasText(content)) {
                 throw new BizException("文件内容为空，无法解析");
             }
@@ -47,16 +50,32 @@ public class DocumentParser {
     public ParsedDocument parse(InputStream in, String fileName) {
         String extension = extractExtension(fileName);
         if (!SUPPORTED_EXTENSIONS.contains(extension)) {
-            throw new BizException("暂仅支持 TXT / Markdown 文件（.txt / .md）");
+            throw new BizException("暂仅支持 PDF / TXT / Markdown 文件（.pdf / .txt / .md）");
         }
         try {
-            String content = readUtf8(in);
+            String content = parseContent(in, extension);
             if (!StringUtils.hasText(content)) {
                 throw new BizException("文件内容为空，无法解析");
             }
             return new ParsedDocument(deriveTitle(fileName), extension, content.trim());
         } catch (IOException ex) {
             throw new BizException("读取文件失败：" + ex.getMessage());
+        }
+    }
+
+    private String parseContent(InputStream in, String extension) throws IOException {
+        if ("pdf".equals(extension)) {
+            return extractPdfText(in.readAllBytes());
+        }
+        return readUtf8(in);
+    }
+
+    private static String extractPdfText(byte[] bytes) throws IOException {
+        try (PDDocument document = Loader.loadPDF(bytes)) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            return stripper.getText(document);
+        } catch (IOException ex) {
+            throw new BizException("PDF 解析失败：" + ex.getMessage());
         }
     }
 

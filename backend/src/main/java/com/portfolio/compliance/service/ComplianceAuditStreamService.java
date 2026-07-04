@@ -82,7 +82,7 @@ public class ComplianceAuditStreamService {
 
                 @Override
                 public void onToken(String token) {
-                    sendEvent(emitter, "token", Map.of("text", token));
+                    sendEvent(emitter, "narrative", Map.of("text", token));
                 }
             });
 

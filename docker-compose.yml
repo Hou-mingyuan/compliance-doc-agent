@@ -24,6 +24,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    expose:
+      - "8080"
     ports:
       - "${BACKEND_HOST_PORT:-8080}:8080"
     volumes:
@@ -75,6 +77,7 @@ services:
         condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-8080}:80"
+    # Nginx 反代 /api → backend:8080（见 frontend/nginx.conf）
 
 volumes:
   h2data:

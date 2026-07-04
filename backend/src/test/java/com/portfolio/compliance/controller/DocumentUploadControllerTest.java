@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 
 import com.portfolio.compliance.ComplianceDocAgentApplication;
+import com.portfolio.compliance.mapper.ComplianceDocumentChunkMapper;
 import com.portfolio.compliance.mapper.ComplianceDocumentMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,9 @@ class DocumentUploadControllerTest {
     @Autowired
     private ComplianceDocumentMapper documentMapper;
 
+    @Autowired
+    private ComplianceDocumentChunkMapper chunkMapper;
+
     @Test
     void uploadTxtPersistsDocument() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
@@ -43,9 +47,11 @@ class DocumentUploadControllerTest {
                 .andExpect(jsonPath("$.data.docType").value("CONTRACT"))
                 .andExpect(jsonPath("$.data.format").value("txt"))
                 .andExpect(jsonPath("$.data.status").value("UPLOADED"))
-                .andExpect(jsonPath("$.data.contentLength").value(15));
+                .andExpect(jsonPath("$.data.contentLength").value(15))
+                .andExpect(jsonPath("$.data.chunkCount").value(1));
 
         assertThat(documentMapper.selectCount(null)).isEqualTo(1);
+        assertThat(chunkMapper.selectCount(null)).isEqualTo(1);
     }
 
     @Test
@@ -65,7 +71,7 @@ class DocumentUploadControllerTest {
     @Test
     void uploadRejectsUnsupportedFormat() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
-                "file", "scan.pdf", "application/pdf", "%PDF".getBytes(StandardCharsets.UTF_8));
+                "file", "scan.docx", "application/vnd.openxmlformats", "binary".getBytes(StandardCharsets.UTF_8));
 
         mockMvc.perform(multipart("/api/documents/upload").file(file))
                 .andExpect(status().isOk())

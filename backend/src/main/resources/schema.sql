@@ -20,3 +20,13 @@ CREATE TABLE IF NOT EXISTS compliance_check (
     message      TEXT,
     created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS compliance_document_chunk (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    document_id  BIGINT       NOT NULL,
+    chunk_index  INT          NOT NULL,
+    content      TEXT         NOT NULL,
+    char_start   INT,
+    char_end     INT,
+    created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP
+);

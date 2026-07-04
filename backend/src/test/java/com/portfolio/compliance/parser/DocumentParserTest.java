@@ -4,9 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 
 import com.portfolio.compliance.common.BizException;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -76,20 +82,40 @@ class DocumentParserTest {
     @Test
     void rejectsUnsupportedExtension() {
         MockMultipartFile file = new MockMultipartFile(
-                "file", "report.pdf", "application/pdf", "binary".getBytes(StandardCharsets.UTF_8));
+                "file", "report.docx", "application/vnd.openxmlformats", "binary".getBytes(StandardCharsets.UTF_8));
 
         assertThatThrownBy(() -> parser.parse(file))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("TXT / Markdown");
+                .hasMessageContaining("PDF / TXT / Markdown");
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("TODO: 实现 DocumentParser 后 — 从 classpath sample.docx 提取纯文本")
-    void extractsPlainTextFromDocx() {
+    void extractsPlainTextFromPdf() throws Exception {
+        byte[] pdfBytes = samplePdf("Data protection compliance clause for both parties.");
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "合规条款.pdf", "application/pdf", pdfBytes);
+
+        DocumentParser.ParsedDocument doc = parser.parse(file);
+
+        assertThat(doc.format()).isEqualTo("pdf");
+        assertThat(doc.content()).contains("Data protection");
     }
 
-    @Test
-    @org.junit.jupiter.api.Disabled("TODO: 实现 DocumentParser 后 — 从 classpath sample.pdf 提取文本")
-    void extractsPlainTextFromPdf() {
+    private static byte[] samplePdf(String text) throws Exception {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            try (PDPageContentStream cs = new PDPageContentStream(document, page)) {
+                cs.beginText();
+                cs.setFont(font, 12);
+                cs.newLineAtOffset(50, 700);
+                cs.showText(text);
+                cs.endText();
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            document.save(out);
+            return out.toByteArray();
+        }
     }
 }

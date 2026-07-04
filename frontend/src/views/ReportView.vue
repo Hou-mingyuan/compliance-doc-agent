@@ -72,7 +72,7 @@ async function startStream() {
           auditId.value = String(d.auditId ?? "");
         } else if (event === "finding") {
           findings.value.push(d as unknown as AuditFinding);
-        } else if (event === "token") {
+        } else if (event === "token" || event === "narrative") {
           narrative.value += String(d.text ?? d.content ?? "");
           scrollNarrative();
         } else if (event === "summary") {

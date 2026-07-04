@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 /** 基于 rules/default-rules.json 的可配置合规规则引擎。 */
 @Component
-public class RuleEngine {
+public class RuleEngine implements ComplianceRuleEngine {
 
     private static final String RULES_RESOURCE = "rules/default-rules.json";
     private static final String EMPTY_CONTENT_CODE = "EMPTY_CONTENT";
@@ -23,6 +23,7 @@ public class RuleEngine {
         this.rules = loadRules();
     }
 
+    @Override
     public List<ComplianceRule> evaluate(String content) {
         List<ComplianceRule> hits = new ArrayList<>();
         if (content == null || content.isBlank()) {
@@ -44,6 +45,11 @@ public class RuleEngine {
             }
         }
         return hits;
+    }
+
+    @Override
+    public int ruleCount() {
+        return rules.size();
     }
 
     private List<LoadedRule> loadRules() {

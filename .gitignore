@@ -5,6 +5,7 @@
 *.local
 
 # --- Java / Maven ---
+target/
 backend/target/
 !backend/.mvn/wrapper/maven-wrapper.jar
 *.class
@@ -17,6 +18,8 @@ backend/data/
 data/
 
 # --- 前端 ---
+node_modules/
+dist/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/

@@ -9,5 +9,6 @@ public record DocumentUploadResponse(
         String format,
         String status,
         int contentLength,
+        int chunkCount,
         LocalDateTime createdAt) {
 }

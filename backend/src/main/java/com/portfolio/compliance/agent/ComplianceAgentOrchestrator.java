@@ -17,7 +17,7 @@ import com.portfolio.compliance.llm.LlmClient;
 import com.portfolio.compliance.llm.ToolCall;
 import com.portfolio.compliance.llm.ToolSpec;
 import com.portfolio.compliance.rules.ComplianceRule;
-import com.portfolio.compliance.rules.RuleEngine;
+import com.portfolio.compliance.rules.ComplianceRuleEngine;
 import com.portfolio.compliance.rules.RuleSeverity;
 import org.springframework.stereotype.Component;
 
@@ -28,14 +28,14 @@ public class ComplianceAgentOrchestrator {
     private static final int MAX_TOOL_ROUNDS = 5;
 
     private final LlmClient llm;
-    private final RuleEngine ruleEngine;
+    private final ComplianceRuleEngine ruleEngine;
     private final ToolRegistry toolRegistry;
     private final AppProperties props;
     private final ObjectMapper om;
 
     public ComplianceAgentOrchestrator(
             LlmClient llm,
-            RuleEngine ruleEngine,
+            ComplianceRuleEngine ruleEngine,
             ToolRegistry toolRegistry,
             AppProperties props,
             ObjectMapper om) {
