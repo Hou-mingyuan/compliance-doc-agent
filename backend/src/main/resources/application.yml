@@ -1,0 +1,55 @@
+server:
+  port: 8090
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: compliance-doc-agent
+  datasource:
+    url: jdbc:h2:mem:compliance;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: false
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+app:
+  cors:
+    allowed-origins: "*"
+  llm:
+    provider: ${LLM_PROVIDER:mock}
+    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+    api-key: ${LLM_API_KEY:}
+    model: ${LLM_MODEL:gpt-4o-mini}
+    temperature: ${LLM_TEMPERATURE:0.2}
+    timeout-seconds: ${LLM_TIMEOUT:90}
+  agent:
+    system-prompt: |
+      你是企业合规文档审查助手，负责分析合同、制度、政策等文本的合规风险。
+      请用简体中文、条理清晰地输出：风险等级、问题清单、修改建议。
+      仅基于给定文档内容分析，禁止编造未出现的条款或法规。
+  rules:
+    enabled: true
+
+logging:
+  level:
+    com.portfolio.compliance: INFO

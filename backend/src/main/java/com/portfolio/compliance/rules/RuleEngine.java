@@ -1,0 +1,104 @@
+package com.portfolio.compliance.rules;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.stereotype.Component;
+
+/** 基于 rules/default-rules.json 的可配置合规规则引擎。 */
+@Component
+public class RuleEngine {
+
+    private static final String RULES_RESOURCE = "rules/default-rules.json";
+    private static final String EMPTY_CONTENT_CODE = "EMPTY_CONTENT";
+
+    private final List<LoadedRule> rules;
+
+    public RuleEngine() {
+        this.rules = loadRules();
+    }
+
+    public List<ComplianceRule> evaluate(String content) {
+        List<ComplianceRule> hits = new ArrayList<>();
+        if (content == null || content.isBlank()) {
+            hits.add(new ComplianceRule(
+                    EMPTY_CONTENT_CODE,
+                    "空文档",
+                    RuleSeverity.ERROR,
+                    "文档内容为空，无法进行合规审查。"));
+            return hits;
+        }
+
+        for (LoadedRule rule : rules) {
+            if (rule.matches(content)) {
+                hits.add(new ComplianceRule(
+                        rule.id(),
+                        rule.name(),
+                        rule.severity(),
+                        rule.message()));
+            }
+        }
+        return hits;
+    }
+
+    private List<LoadedRule> loadRules() {
+        try (InputStream in = new ClassPathResource(RULES_RESOURCE).getInputStream()) {
+            DefaultRulesPack pack = new ObjectMapper().readValue(in, DefaultRulesPack.class);
+            List<LoadedRule> loaded = new ArrayList<>();
+            for (DefaultRulesPack.RuleDefinition def : pack.rules()) {
+                loaded.add(LoadedRule.from(def));
+            }
+            return List.copyOf(loaded);
+        } catch (IOException e) {
+            throw new IllegalStateException("无法加载内置规则包: " + RULES_RESOURCE, e);
+        }
+    }
+
+    private record LoadedRule(
+            String id,
+            String name,
+            RuleSeverity severity,
+            String message,
+            Pattern pattern,
+            boolean missingKeyword) {
+
+        static LoadedRule from(DefaultRulesPack.RuleDefinition def) {
+            boolean missing = def.name() != null && def.name().contains("缺失");
+            return new LoadedRule(
+                    def.id(),
+                    def.name(),
+                    mapSeverity(def.severity()),
+                    buildMessage(def.name(), missing),
+                    Pattern.compile(def.pattern(), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
+                    missing);
+        }
+
+        boolean matches(String content) {
+            boolean found = pattern.matcher(content).find();
+            return missingKeyword ? !found : found;
+        }
+
+        private static RuleSeverity mapSeverity(String severity) {
+            if (severity == null) {
+                return RuleSeverity.WARNING;
+            }
+            return switch (severity.toUpperCase()) {
+                case "HIGH" -> RuleSeverity.ERROR;
+                case "LOW" -> RuleSeverity.INFO;
+                default -> RuleSeverity.WARNING;
+            };
+        }
+
+        private static String buildMessage(String name, boolean missing) {
+            if (missing) {
+                return "未检测到「" + name.replace("缺失", "").replace("制度", "") + "」相关表述，请补充相应条款。";
+            }
+            return "检测到「" + name + "」相关风险表述，建议法务复核。";
+        }
+    }
+}

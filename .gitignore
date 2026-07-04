@@ -1,0 +1,34 @@
+# --- 密钥 / 环境 ---
+.env
+.env.local
+.env.*.local
+*.local
+
+# --- Java / Maven ---
+backend/target/
+!backend/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+!**/maven-wrapper.jar
+hs_err_pid*
+
+# --- H2 本地持久化（可选 file 模式）---
+backend/data/
+data/
+
+# --- 前端 ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- IDE / 系统 ---
+.idea/
+*.iml
+.vscode/
+*.log
+logs/
+.DS_Store
+Thumbs.db
