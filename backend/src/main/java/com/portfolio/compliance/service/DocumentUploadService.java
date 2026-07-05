@@ -3,6 +3,7 @@ package com.portfolio.compliance.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.portfolio.compliance.controller.dto.DocumentListItem;
 import com.portfolio.compliance.controller.dto.DocumentUploadResponse;
 import com.portfolio.compliance.entity.ComplianceDocument;
 import com.portfolio.compliance.entity.ComplianceDocumentChunk;
@@ -12,6 +13,7 @@ import com.portfolio.compliance.parser.DocumentParser;
 import com.portfolio.compliance.parser.DocumentParser.ParsedDocument;
 import com.portfolio.compliance.parser.TextChunker;
 import com.portfolio.compliance.parser.TextChunker.TextChunk;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -62,6 +64,20 @@ public class DocumentUploadService {
                 parsed.content().length(),
                 chunks.size(),
                 doc.getCreatedAt());
+    }
+
+    public List<DocumentListItem> listDocuments() {
+        QueryWrapper<ComplianceDocument> q = new QueryWrapper<>();
+        q.orderByDesc("created_at");
+        return documentMapper.selectList(q).stream()
+                .map(doc -> DocumentListItem.from(new DocumentListItem.ComplianceDocumentView(
+                        doc.getId(),
+                        doc.getTitle(),
+                        doc.getDocType(),
+                        doc.getStatus(),
+                        doc.getContent() != null ? doc.getContent().length() : 0,
+                        doc.getCreatedAt())))
+                .toList();
     }
 
     private void persistChunks(Long documentId, List<TextChunk> chunks, LocalDateTime now) {

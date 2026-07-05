@@ -1,8 +1,11 @@
 package com.portfolio.compliance.controller;
 
 import com.portfolio.compliance.common.ApiResponse;
+import com.portfolio.compliance.controller.dto.DocumentListItem;
 import com.portfolio.compliance.controller.dto.DocumentUploadResponse;
 import com.portfolio.compliance.service.DocumentUploadService;
+import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -17,6 +20,11 @@ public class DocumentUploadController {
 
     public DocumentUploadController(DocumentUploadService uploadService) {
         this.uploadService = uploadService;
+    }
+
+    @GetMapping
+    public ApiResponse<List<DocumentListItem>> list() {
+        return ApiResponse.ok(uploadService.listDocuments());
     }
 
     @PostMapping("/upload")

@@ -1,4 +1,4 @@
-/** REST + SSE 封装，约定后端运行在 8080（开发由 Vite proxy 转发） */
+/** REST + SSE 封装，开发环境由 Vite proxy 转发至后端 8090 */
 
 export interface ApiResponse<T> {
   code: number;
@@ -13,6 +13,42 @@ export interface DocumentItem {
   contentType: string;
   status: "uploaded" | "auditing" | "done" | "failed";
   uploadedAt: string;
+}
+
+interface UploadResponseDto {
+  id: number;
+  title: string;
+  docType: string;
+  format: string;
+  status: string;
+  contentLength: number;
+  chunkCount: number;
+  createdAt: string;
+}
+
+function mapUploadStatus(status: string): DocumentItem["status"] {
+  switch (status?.toUpperCase()) {
+    case "AUDITING":
+      return "auditing";
+    case "DONE":
+      return "done";
+    case "FAILED":
+      return "failed";
+    default:
+      return "uploaded";
+  }
+}
+
+function toDocumentItem(d: UploadResponseDto): DocumentItem {
+  const ext = d.format ? `.${d.format}` : "";
+  return {
+    id: String(d.id),
+    filename: d.title.includes(".") ? d.title : `${d.title}${ext}`,
+    size: d.contentLength,
+    contentType: d.format || "text/plain",
+    status: mapUploadStatus(d.status),
+    uploadedAt: d.createdAt,
+  };
 }
 
 export interface AuditFinding {
@@ -48,9 +84,9 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     const resp = await fetch("/api/documents/upload", { method: "POST", body: form });
-    const json = (await resp.json()) as ApiResponse<DocumentItem>;
+    const json = (await resp.json()) as ApiResponse<UploadResponseDto>;
     if (json.code !== 0) throw new Error(json.message || "上传失败");
-    return json.data;
+    return toDocumentItem(json.data);
   },
   getReport: (auditId: string) => request<AuditReport>(`/api/audit/${auditId}`),
 };

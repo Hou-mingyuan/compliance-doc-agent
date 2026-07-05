@@ -1,19 +1,18 @@
-# 使用指南 · Mock 零密钥体验（草稿）
+# 使用指南 · Mock 零密钥体验
 
-> 本文档说明如何**不配置任何大模型 API Key**，体验合规文档智能审核 Agent 的核心流程。  
-> 当前为 MVP 草稿：后端已支持文本分析与 Mock LLM；前端已具备上传页 / 报告页 / SSE 流式展示骨架，完整文件上传与 `/api/audit/stream` 接口待后端补齐后与本指南同步更新。
+本文档说明如何**不配置任何大模型 API Key**，完整体验合规文档智能审核 Agent：**上传文档 → SSE 流式审核 → 查看报告**。
 
 ---
 
 ## 为什么可以零密钥运行？
 
-项目默认 `LLM_PROVIDER=mock`（见 `backend/src/main/resources/application.yml`）。Mock 模型为离线内置、规则驱动，无需联网调用外部大模型，即可跑通：
+项目默认 `LLM_PROVIDER=mock`（见 `backend/src/main/resources/application.yml`）。Mock 模型为离线内置，无需联网调用外部大模型，即可跑通：
 
-- 内置规则引擎扫描（关键词 / 正则）
-- Mock LLM 语义复核与摘要生成
-- 风险项持久化与报告返回
+- 内置 JSON 规则引擎（10 条默认规则，关键词 / 正则）
+- Mock LLM 语义摘要（流式 token 输出）
+- 风险项持久化与审核摘要
 
-适合本地体验、演示与 CI。接入 OpenAI / DeepSeek / 通义 / Ollama 等真实模型时，只需在环境变量中填入 `LLM_API_KEY` 并将 `LLM_PROVIDER` 设为 `openai`（OpenAI 兼容网关）。
+适合本地体验、演示与 CI。接入 OpenAI / DeepSeek / 通义 / Ollama 等真实模型时，在环境变量中填入 `LLM_API_KEY` 并将 `LLM_PROVIDER` 设为 `openai` 即可。
 
 ---
 
@@ -21,86 +20,39 @@
 
 | 方式 | 要求 |
 | --- | --- |
-| **后端本地** | JDK 17+、Maven 3.8+ |
-| **前端本地** | Node.js 18+ |
-| **Docker（规划中）** | Docker Desktop + Compose |
+| **本地联调（推荐）** | JDK 17+、Maven 3.8+、Node.js 18+ |
+| **Docker Compose** | Docker Desktop + Compose |
 
 默认端口：
 
 | 服务 | 端口 | 说明 |
 | --- | --- | --- |
 | 后端 | **8090** | `application.yml` 中 `server.port` |
-| 前端 dev | **5173** | Vite 开发服务器 |
-| 前端 proxy | → 8080 | 当前 `vite.config.ts` 代理目标；**本地联调时请改为 8090 或统一 docker-compose 端口** |
+| 前端 dev | **5173** | Vite 开发服务器，proxy → 8090 |
+| Docker 后端 | **8080** | `docker-compose.yml` 中 `BACKEND_HOST_PORT` |
 
 ---
 
-## 方式一：后端 Mock 模式（当前可用）
+## 方式一：前后端本地联调（已验证）
 
-### 1. 启动后端
+### 1. 启动后端（Mock，零密钥）
 
 ```bash
 cd compliance-doc-agent/backend
 mvn spring-boot:run
 ```
 
-无需设置任何环境变量。启动后验证：
+验证：
 
 ```bash
 curl http://localhost:8090/api/health
 ```
 
-预期返回（`code: 0`）：
+预期：`"llmProvider":"mock"`
 
-```json
-{
-  "code": 0,
-  "data": { "status": "UP", "llmProvider": "mock" }
-}
-```
+### 2. 启动前端
 
-### 2. 发起文本合规分析
-
-当前 MVP 接口为 **POST `/api/compliance/analyze`**（JSON 正文，非文件上传）：
-
-```bash
-curl -X POST http://localhost:8090/api/compliance/analyze \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"title\": \"采购合同-示例\",
-    \"docType\": \"CONTRACT\",
-    \"content\": \"本合同约定付款账期为120天。甲方享有单方无条件解除权。未约定保密条款。\"
-  }"
-```
-
-预期行为：
-
-1. 规则引擎命中内置规则（如付款周期超 90 天、缺失保密条款、单方解除权等）
-2. Mock LLM 生成合规摘要与整改建议
-3. 返回 `documentId`、风险等级、规则命中列表与 LLM 摘要
-
----
-
-## 方式二：前端 + 后端联调（目标流程）
-
-### 1. 启动后端
-
-```bash
-cd compliance-doc-agent/backend
-mvn spring-boot:run
-```
-
-### 2. 调整前端代理（联调必做）
-
-编辑 `frontend/vite.config.ts`，将 proxy target 改为后端实际端口：
-
-```ts
-proxy: {
-  "/api": { target: "http://localhost:8090", changeOrigin: true },
-}
-```
-
-### 3. 启动前端
+`frontend/vite.config.ts` 已将 `/api` 代理到 `http://localhost:8090`，无需修改。
 
 ```bash
 cd compliance-doc-agent/frontend
@@ -108,61 +60,136 @@ npm install
 npm run dev
 ```
 
-浏览器访问：http://localhost:5173
+浏览器打开：http://localhost:5173
 
-### 4. 体验路径：上传 → 审核 → 报告
+### 3. 体验路径：上传 → SSE 审核 → 报告
 
 | 步骤 | 操作 | 预期 |
 | --- | --- | --- |
-| 1 | 打开 **「文档上传」** | 拖拽或选择 PDF / DOCX / TXT 等合规材料 |
-| 2 | 上传成功后点击 **「开始审核」** | 跳转至审核报告页，携带 `documentId` |
-| 3 | 报告页自动发起 **SSE 流式审核** | 实时展示风险项（finding）、详细分析（token 流）、审核摘要 |
-| 4 | 审核完成 | 可查看报告 ID，或通过 `/report/:id` 加载历史报告 |
-| 5 | 点击 **「重新审核」** | 对同一文档再次发起流式审核 |
+| 1 | 打开 **「文档上传」**，上传 `backend/src/main/resources/samples/合同条款片段.txt` | 列表出现文档，状态「已上传」 |
+| 2 | 点击 **「开始审核」** | 跳转报告页，自动发起 SSE |
+| 3 | 观察流式输出 | 实时追加 **风险项**（finding）、**详细分析**（narrative token）、**审核摘要**（summary） |
+| 4 | 审核完成 | 显示报告 ID 与风险分布；可点击「重新审核」 |
 
-> **接口约定（前端已实现，后端待对齐）**  
-> - `POST /api/documents/upload` — multipart 上传  
-> - `GET /api/documents` — 文档列表  
-> - `POST /api/audit/stream` — SSE 流式审核（事件：`start` / `finding` / `token` / `summary` / `done` / `error`）  
-> - `GET /api/audit/{id}` — 历史报告详情  
+**样例合同预期命中（部分）：**
+
+| 规则 ID | 说明 |
+| --- | --- |
+| R-CON-001 | 缺失争议解决条款 |
+| R-CON-003 | 禁止无限连带责任 / 免除全部责任 |
+| R-PII-001 | 疑似身份证号泄露 |
+| R-POL-001 / R-DISC-001 | 制度/披露类缺失条款（按全文扫描） |
 
 ---
 
-## 方式三：Docker 一键启动（规划中）
+## 前端 SSE 联调说明
+
+> 前端无独立 `AuditStream.vue`；SSE 消费逻辑分布在 `frontend/src/api.ts`（`streamAudit`）与 `frontend/src/views/ReportView.vue`（事件回调）。
+
+### 调用链路
+
+| 步骤 | 文件 | 行为 |
+| --- | --- | --- |
+| 1 | `UploadView.vue` | 点击「开始审核」→ `router.push({ path: '/report', query: { documentId, filename } })` |
+| 2 | `ReportView.vue` | `onMounted` 检测 `documentId` 查询参数 → 调用 `startStream()` |
+| 3 | `api.ts` → `streamAudit` | `POST /api/compliance/audit/stream/{documentId}`，`Accept: text/event-stream`，`AbortSignal` 支持停止 |
+| 4 | `vite.config.ts` | `/api` 代理至 `http://localhost:8090`（Docker 外本地 dev 默认） |
+
+### 前后端事件契约
+
+后端 `ComplianceAuditController` 路径参数为 `docId`（`Long`）；前端以字符串 `documentId` 拼入 URL，二者一致。
+
+| SSE `event` | 后端 payload | 前端处理（`ReportView.vue`） |
+| --- | --- | --- |
+| `start` | `{ auditId, documentId }` | 记录 `auditId` |
+| `finding` | `{ severity, rule, description, location }` | 追加至 `findings[]`（按严重度排序展示） |
+| `narrative` | `{ text }` | 追加至 `narrative` 流式正文（兼容旧名 `token`） |
+| `summary` | `{ text }` | 显示审核摘要 |
+| `done` | `{ auditId, summary }` | 结束流；若 `summary` 存在则覆盖摘要 |
+| `error` | `{ message }` | 显示错误横幅 |
+
+事件顺序：`start` → `finding*` → `narrative*` → `summary` → `done`（异常时 `error`）。
+
+### 联调自检清单
+
+1. 后端 `curl http://localhost:8090/api/health` 返回 `llmProvider: mock`
+2. 前端 dev 控制台 Network 中 SSE 请求为 `POST /api/compliance/audit/stream/{id}`，状态 200，`Content-Type: text/event-stream`
+3. 报告页依次出现：流式条 → 风险项列表追加 → 详细分析打字效果 → 审核摘要
+4. 点击「停止」应触发 `AbortController.abort()`，流中断且无报错
+
+---
+
+## 方式二：命令行快速验证（无需前端）
+
+### 1. 上传文档
+
+```bash
+curl -F "file=@backend/src/main/resources/samples/合同条款片段.txt" \
+     -F "docType=CONTRACT" \
+     http://localhost:8090/api/documents/upload
+```
+
+记录返回的 `data.id`（例如 `2`）。
+
+### 2. SSE 流式审核
+
+```bash
+curl -N -X POST -H "Accept: text/event-stream" \
+     http://localhost:8090/api/compliance/audit/stream/2
+```
+
+SSE 事件顺序：
+
+```
+start → finding* → narrative* → summary → done
+```
+
+| 事件 | 含义 |
+| --- | --- |
+| `start` | 审核开始，含 `auditId`、`documentId` |
+| `finding` | 规则命中项：`severity` / `rule` / `description` / `location` |
+| `narrative` | Mock LLM 流式分析片段（`text`） |
+| `summary` | 审核摘要（如「共发现 N 项风险」） |
+| `done` | 审核结束 |
+| `error` | 失败原因 |
+
+### 3. 文档列表
+
+```bash
+curl http://localhost:8090/api/documents
+```
+
+---
+
+## 方式三：Docker Compose
 
 ```bash
 cd compliance-doc-agent
-cp .env.example .env    # 可选填 LLM_API_KEY
+cp .env.example .env    # 默认 Mock，无需填 LLM_API_KEY
 docker compose up -d --build
 ```
 
-Compose 将统一前后端端口映射；实现完成后本段将补充具体 URL。
+| 入口 | 地址 |
+| --- | --- |
+| 后端健康检查 | http://localhost:8080/api/health |
+| 前端（dev profile） | http://localhost:5173 |
+
+> 使用 Docker 后端 + 容器外前端本地启动时，不要改源码；临时设置
+> `VITE_PROXY_TARGET=http://localhost:8080` 后再运行 `npm run dev` 即可。
 
 ---
 
-## 环境变量说明
-
-所有变量通过 `.env` 或系统环境变量注入，**密钥不入库**。
+## 环境变量
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `LLM_PROVIDER` | `mock` | `mock` = 离线内置；`openai` = OpenAI 兼容 HTTP 网关 |
+| `LLM_PROVIDER` | `mock` | `mock` = 离线内置；`openai` = OpenAI 兼容网关 |
 | `LLM_BASE_URL` | `https://api.openai.com/v1` | 兼容网关地址 |
 | `LLM_MODEL` | `gpt-4o-mini` | 模型名称 |
-| `LLM_API_KEY` | （空） | 留空时自动使用 Mock |
-| `LLM_TEMPERATURE` | `0.2` | 采样温度，合规场景建议低温度 |
-| `LLM_TIMEOUT` | `90` | LLM 请求超时（秒） |
+| `LLM_API_KEY` | （空） | 留空时使用 Mock |
+| `LLM_TEMPERATURE` | `0.2` | 合规场景建议低温度 |
 
-### 常用配置示例
-
-**离线 / 演示（默认，零密钥）**
-
-```bash
-# 无需设置，或显式：
-LLM_PROVIDER=mock
-```
-
-**DeepSeek**
+**DeepSeek 示例：**
 
 ```bash
 LLM_PROVIDER=openai
@@ -171,52 +198,37 @@ LLM_MODEL=deepseek-chat
 LLM_API_KEY=sk-your-key
 ```
 
-**本地 Ollama**
-
-```bash
-LLM_PROVIDER=openai
-LLM_BASE_URL=http://localhost:11434/v1
-LLM_MODEL=qwen2.5:7b
-LLM_API_KEY=ollama
-```
-
-**通义千问**
-
-```bash
-LLM_PROVIDER=openai
-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_MODEL=qwen-plus
-LLM_API_KEY=sk-your-dashscope-key
-```
-
 ---
 
-## Mock 模式示例话术
+## API 一览（MVP 联调）
 
-对 **POST `/api/compliance/analyze`** 使用以下示例正文，可稳定触发多条内置规则：
-
-| 场景 | 示例内容片段 | 预期命中 |
+| 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| 付款账期过长 | `付款账期为120天` | `PAYMENT_TERM_EXCEEDS_90D` |
-| 缺失保密 | 全文无「保密」相关表述 | `MISSING_NDA_CLAUSE` |
-| 单方解除 | `甲方享有单方无条件解除权` | `UNILATERAL_TERMINATION` |
-| 违约金过高 | `违约金为合同总额的30%` | `EXCESSIVE_PENALTY` |
+| GET | `/api/health` | 健康检查（含 `llmProvider`） |
+| GET | `/api/documents` | 已上传文档列表 |
+| POST | `/api/documents/upload` | multipart 上传（PDF / TXT / MD） |
+| POST | `/api/compliance/audit/stream/{docId}` | SSE 流式审核 |
+| POST | `/api/compliance/analyze` | JSON 文本分析（备用） |
 
 ---
 
 ## 常见问题
 
-**Q：前端上传后报网络错误？**  
-A：确认后端已启动，且 `vite.config.ts` 的 proxy target 与后端端口（8090）一致。
+**Q：前端上传后报网络错误？**
 
-**Q：没有 LLM Key 能完整体验吗？**  
-A：可以。Mock 模式下规则引擎 + Mock LLM 摘要均可离线运行；仅 SSE 流式与文件上传需等待后端接口对齐。
+A：确认后端已启动；本地开发时 proxy 指向 **8090**（`mvn spring-boot:run`）或 Docker **8080**。
 
-**Q：如何切换真实大模型？**  
-A：设置 `LLM_PROVIDER=openai` 并填入 `LLM_API_KEY`，重启后端即可。
+**Q：没有 LLM Key 能完整体验吗？**
 
-**Q：支持哪些文档格式？**  
-A：目标支持 PDF / DOCX / TXT / MD（见 [project-07-spec.md](./ai-portfolio/project-07-spec.md)）；当前 analyze 接口接受纯文本 JSON。
+A：可以。规则引擎 + Mock LLM 摘要 + SSE 流式均已支持零密钥运行。
+
+**Q：支持哪些格式？**
+
+A：当前解析支持 **PDF / TXT / Markdown**（`.pdf` / `.txt` / `.md`），单文件 ≤ 5MB。
+
+**Q：如何切换真实大模型？**
+
+A：设置 `LLM_PROVIDER=openai` 并填入 `LLM_API_KEY`，重启后端。
 
 ---
 
@@ -224,10 +236,11 @@ A：目标支持 PDF / DOCX / TXT / MD（见 [project-07-spec.md](./ai-portfolio
 
 | 文档 | 说明 |
 | --- | --- |
-| [project-07-spec.md](./ai-portfolio/project-07-spec.md) | MVP 规格书（API、数据模型、验收标准） |
-| [../frontend/src/api.ts](../frontend/src/api.ts) | 前端 REST + SSE 接口约定 |
-| [../backend/src/main/resources/application.yml](../backend/src/main/resources/application.yml) | 后端默认配置 |
+| [project-07-spec.md](./ai-portfolio/project-07-spec.md) | MVP 规格书 |
+| [architecture.md](./architecture.md) | 系统架构 |
+| [E2E.md](./E2E.md) | 端到端测试说明 |
+| [../rules/default-rules.json](../rules/default-rules.json) | 内置 10 条合规规则 |
 
 ---
 
-*本文为草稿，随后端 upload / SSE 接口落地后将更新 Docker 章节与完整端到端截图说明。*
+*最后验证：2026-07-05 · Mock 模式 · 上传 → SSE → 报告全链路通过*
