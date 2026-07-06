@@ -3,6 +3,7 @@
 > 面向内审 / 合规 / 法务场景的**文档智能审核系统**：**规则引擎硬校验** + **LLM 语义审查**双层把关，**Function Calling Agent** 自主调用法规检索、版本 diff、风险评分与报告生成，审核结论全链路留痕。一条 `docker compose` 命令即可拉起，**无需任何大模型密钥**也能完整体验 Mock 审核流程。
 
 <p>
+  <img alt="CI" src="https://github.com/Hou-mingyuan/compliance-doc-agent/actions/workflows/ci.yml/badge.svg">
   <img alt="java" src="https://img.shields.io/badge/Java-17-orange?logo=openjdk&logoColor=white">
   <img alt="spring boot" src="https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white">
   <img alt="rules" src="https://img.shields.io/badge/Rules%20Engine-YAML%20DSL-blue">
@@ -90,6 +91,10 @@ compliance-doc-agent/
 ├── docs/
 │   ├── USAGE.md                      # 使用指南
 │   └── architecture.md               # 架构文档
+├── DEPLOYMENT.md                     # 部署与运维
+├── SECURITY.md                       # 安全策略
+├── PERFORMANCE_REPORT.md             # 压测报告
+├── performance/k6-smoke.js           # k6 只读 API smoke
 ├── docker-compose.yml                # Docker Desktop 一键启动
 ├── .env.example                      # 零密钥 Mock 默认配置
 ├── VERSION
@@ -118,17 +123,51 @@ docker compose up -d --build
 2. 查看 LLM 语义审查产出的隐性风险建议；
 3. 点击「开始审核」→ 报告页通过 SSE 实时显示风险项、流式分析与摘要。
 
+详细步骤见下方 [演示指南](#演示指南) 与 [docs/USAGE.md](docs/USAGE.md)。部署运维见 [DEPLOYMENT.md](DEPLOYMENT.md)，安全策略见 [SECURITY.md](SECURITY.md)。
+
+## 演示指南
+
+面向作品集评审与首次体验。**本项目无需登录账号**；默认 Mock LLM 零密钥即可跑通完整审核链路。
+
+### 演示账号说明
+
+| 项目 | 说明 |
+| --- | --- |
+| 登录 / 演示账号 | **无** — MVP 未接入 RBAC，打开前端即可使用 |
+| 体验方式 | `cp .env.example .env` 后 `docker compose up -d --build`，保持 `LLM_PROVIDER=mock` |
+| 真实 LLM | 可选 BYOK：设置 `LLM_PROVIDER=openai` 与 `LLM_API_KEY` |
+
+### 核心演示流程
+
+| 步骤 | 操作 | 预期 |
+| --- | --- | --- |
+| 1 | 打开 http://localhost:5173 | 审核工作台加载 |
+| 2 | 上传 `backend/src/main/resources/samples/合同条款片段.txt` | 文档列表出现记录 |
+| 3 | 点击「开始审核」 | 跳转报告页，SSE 流式输出 |
+| 4 | 观察风险项 / 详细分析 / 摘要 | 命中 R-CON-001、R-PII-001 等规则；Mock LLM 流式 narrative |
+| 5 | 审核完成 | 显示报告 ID 与风险分布 |
+
+命令行等价验证见 [DEPLOYMENT.md §5](DEPLOYMENT.md#5-健康检查与-smoke)。
+
+### 验收命令
+
+```bash
+curl -f http://localhost:8080/api/health          # 含 "llmProvider":"mock"
+curl -f http://localhost:8080/api/documents       # 200
+cd backend && mvn -B test                         # JUnit 全绿
+```
+
+压测基线见 [PERFORMANCE_REPORT.md](PERFORMANCE_REPORT.md) 与 `performance/k6-smoke.js`。
+
 ### 本地开发
 
 ```bash
 cd backend
-mvn spring-boot:run           # 默认 H2 + Mock LLM
+mvn spring-boot:run           # 默认 H2 + Mock LLM，端口 8090
 
 cd frontend
-npm install && npm run dev    # http://localhost:5173
+npm install && npm run dev    # http://localhost:5173，/api 代理到 8090
 ```
-
-本地开发时后端默认端口为 `8090`，Vite dev server 会把 `/api` 代理到 `http://localhost:8090`。
 
 ## ⚙️ 配置说明
 
