@@ -1,5 +1,7 @@
 /** REST + SSE 封装，开发环境由 Vite proxy 转发至后端 8090 */
 
+import { parseSseBuffer, parseSseData } from "./sseParse";
+
 export interface ApiResponse<T> {
   code: number;
   message: string;
@@ -56,6 +58,20 @@ export interface AuditFinding {
   rule: string;
   description: string;
   location?: string;
+  kind?: "hit" | "missing";
+  matchedText?: string;
+  matchStart?: number;
+  matchEnd?: number;
+}
+
+export interface DocumentContent {
+  id: string;
+  title: string;
+  docType: string;
+  status: string;
+  content: string;
+  contentLength: number;
+  createdAt: string;
 }
 
 export interface AuditReport {
@@ -80,6 +96,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   listDocuments: () => request<DocumentItem[]>("/api/documents"),
+  getDocument: (id: string) => request<DocumentContent>(`/api/documents/${encodeURIComponent(id)}`),
   uploadDocument: async (file: File): Promise<DocumentItem> => {
     const form = new FormData();
     form.append("file", file);
@@ -117,23 +134,10 @@ export async function streamAudit(
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buffer.indexOf("\n\n")) >= 0) {
-      const raw = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      let event = "message";
-      let data = "";
-      for (const line of raw.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) data += line.slice(5).trim();
-      }
-      if (data) {
-        try {
-          onEvent(event, JSON.parse(data));
-        } catch {
-          onEvent(event, data);
-        }
-      }
+    const { frames, remainder } = parseSseBuffer(buffer);
+    buffer = remainder;
+    for (const frame of frames) {
+      onEvent(frame.event, parseSseData(frame.data));
     }
   }
 }

@@ -19,7 +19,7 @@
 ## ✨ 项目亮点
 
 - **规则引擎 + LLM 双层审核，而非纯 ChatGPT 读文档**：YAML 规则 DSL（或 Drools）先行校验必备条款、数值阈值、禁限关键词；规则无法覆盖的语义风险交由 LLM + Function Calling 深度审查，结论可解释、可复核。
-- **8 个 Function Calling 工具**：法规检索、章节取文、规则包执行、版本 diff、实体抽取、风险评分、审核报告生成、整改任务创建 — Agent 决策过程 SSE 流式透明展示。
+- **8 个 Function Calling 工具**：已在 `ToolRegistry` 注册（**1 个接真实规则引擎** + **7 个结构化 Mock stub**），Agent 编排与 SSE 流式展示可用 — 详见下表「实现状态」。
 - **贴合内审合规场景**：合同 / 内控制度 / 信息披露等文档类型；审核工作流状态机（上传 → 机审 → 人工确认 → 整改闭环）；`audit_event` 全链路留痕。
 - **Mock 优先体验**：内置 Mock 法规库 + Mock LLM，无 API Key 可跑通「上传 → 规则命中 → 语义发现 → 报告预览」完整链路。
 - **可插拔多模型**：OpenAI 兼容接口，`DeepSeek / 通义 / Ollama` 环境变量一键切换。
@@ -193,16 +193,20 @@ npm install && npm run dev    # http://localhost:5173，/api 代理到 8090
 
 ## 🧠 Agent 工具一览
 
-| 工具名 | 用途 | 关键参数 |
-| --- | --- | --- |
-| `search_regulation` | 检索法规 / 内规库 | `keyword`, `category` |
-| `get_document_section` | 按章节 / 页码取原文 | `docId`, `sectionId` |
-| `run_rule_pack` | 执行规则包 | `docId`, `rulePackId` |
-| `compare_document_versions` | 版本 diff | `docId`, `baseVersion`, `targetVersion` |
-| `extract_entities` | 抽取甲乙方、金额、日期等 | `docId` |
-| `calculate_risk_score` | 汇总风险评分 | `docId`, `findingIds` |
-| `generate_audit_report` | 生成审核报告 | `docId`, `format` |
-| `create_remediation_task` | 创建整改任务 | `docId`, `findingId`, `assignee` |
+> 工具名与 `ToolNames.java` / `ComplianceAgentToolStubs` 一致。**Round-7**：README 与代码实现对齐，明确 stub 与真实实现边界。
+
+| 工具名 | 用途 | 实现状态 | 关键参数 |
+| --- | --- | --- | --- |
+| `check_rules` | 规则包硬校验（真实引擎） | ✅ **真实** · `ComplianceRuleEngine` | `doc_content`, `rule_pack_id` |
+| `compare_clause` | 条款 / 版本 diff | 🔶 **Mock stub** · 结构化 findings | `doc_id`, `base_version`, `target_version` |
+| `summarize_risks` | 汇总风险评分 | 🔶 **Mock stub** | `doc_id`, `finding_ids` |
+| `search_regulation` | 检索法规 / 内规库 | 🔶 **Mock stub** | `keyword`, `category` |
+| `get_document_section` | 按章节 / 页码取原文 | 🔶 **Mock stub** | `doc_id`, `section_id` |
+| `extract_entities` | 抽取甲乙方、金额、日期等 | 🔶 **Mock stub** | `doc_id` |
+| `generate_audit_report` | 生成审核报告 | 🔶 **Mock stub** | `doc_id`, `format` |
+| `create_remediation_task` | 创建整改任务 | 🔶 **Mock stub** | `doc_id`, `finding_id`, `assignee` |
+
+**说明**：stub 工具在 Mock LLM / 零密钥演示下返回**固定结构**的 findings，便于 Agent 编排与 SSE 可视化验收；Phase 2 目标是将 🔶 项替换为真实检索 / 抽取 / 报告生成实现。
 
 ## 📋 审核工作流
 
@@ -223,12 +227,13 @@ UPLOADED → PARSING → RULE_REVIEW → LLM_REVIEW → PENDING_CONFIRM
 - [x] 审核工作台（上传列表 + SSE 报告）
 - [x] Docker Compose 一键启动
 
-### Phase 2 — Agent 增强
+### Phase 2 — Agent 增强（进行中 · Round-7 现状标注）
 
-- [ ] 8 个 Function Calling 工具全部实现
-- [ ] Agent 对话追问（SSE + 工具可视化）
-- [ ] 版本 diff + 审核报告 PDF 导出
-- [ ] 接入真实 LLM
+- [x] **8 个工具注册**到 `ToolRegistry`（`check_rules` 真实 · 其余 7 个 Mock stub）
+- [x] Agent 编排 + 审核 SSE 流式（Mock LLM 零密钥可演示）
+- [ ] 7 个 stub 工具替换为真实实现（法规检索 / 实体抽取 / 报告 PDF 等）
+- [ ] Agent 对话追问 UI（工具调用可视化 polish）
+- [ ] 接入真实 LLM（OpenAI 兼容，`LLM_API_KEY`）
 
 ### Phase 3 — 生产化
 

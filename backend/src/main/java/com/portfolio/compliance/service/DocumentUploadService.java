@@ -3,6 +3,8 @@ package com.portfolio.compliance.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.portfolio.compliance.common.BizException;
+import com.portfolio.compliance.controller.dto.DocumentContentResponse;
 import com.portfolio.compliance.controller.dto.DocumentListItem;
 import com.portfolio.compliance.controller.dto.DocumentUploadResponse;
 import com.portfolio.compliance.entity.ComplianceDocument;
@@ -78,6 +80,22 @@ public class DocumentUploadService {
                         doc.getContent() != null ? doc.getContent().length() : 0,
                         doc.getCreatedAt())))
                 .toList();
+    }
+
+    public DocumentContentResponse getDocument(Long id) {
+        ComplianceDocument doc = documentMapper.selectById(id);
+        if (doc == null) {
+            throw new BizException(404, "文档不存在：" + id);
+        }
+        String content = doc.getContent() == null ? "" : doc.getContent();
+        return new DocumentContentResponse(
+                doc.getId(),
+                doc.getTitle(),
+                doc.getDocType(),
+                doc.getStatus(),
+                content,
+                content.length(),
+                doc.getCreatedAt());
     }
 
     private void persistChunks(Long documentId, List<TextChunk> chunks, LocalDateTime now) {

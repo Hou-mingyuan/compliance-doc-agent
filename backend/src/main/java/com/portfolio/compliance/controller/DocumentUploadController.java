@@ -1,11 +1,13 @@
 package com.portfolio.compliance.controller;
 
 import com.portfolio.compliance.common.ApiResponse;
+import com.portfolio.compliance.controller.dto.DocumentContentResponse;
 import com.portfolio.compliance.controller.dto.DocumentListItem;
 import com.portfolio.compliance.controller.dto.DocumentUploadResponse;
 import com.portfolio.compliance.service.DocumentUploadService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,6 +27,11 @@ public class DocumentUploadController {
     @GetMapping
     public ApiResponse<List<DocumentListItem>> list() {
         return ApiResponse.ok(uploadService.listDocuments());
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<DocumentContentResponse> get(@PathVariable Long id) {
+        return ApiResponse.ok(uploadService.getDocument(id));
     }
 
     @PostMapping("/upload")

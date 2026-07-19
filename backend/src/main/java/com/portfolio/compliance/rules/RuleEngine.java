@@ -36,12 +36,16 @@ public class RuleEngine implements ComplianceRuleEngine {
         }
 
         for (LoadedRule rule : rules) {
-            if (rule.matches(content)) {
+            MatchSpan span = rule.matchSpan(content);
+            if (span != null) {
                 hits.add(new ComplianceRule(
                         rule.id(),
                         rule.name(),
                         rule.severity(),
-                        rule.message()));
+                        rule.message(),
+                        span.start(),
+                        span.end(),
+                        span.text()));
             }
         }
         return hits;
@@ -85,8 +89,18 @@ public class RuleEngine implements ComplianceRuleEngine {
         }
 
         boolean matches(String content) {
-            boolean found = pattern.matcher(content).find();
-            return missingKeyword ? !found : found;
+            return matchSpan(content) != null;
+        }
+
+        MatchSpan matchSpan(String content) {
+            if (missingKeyword) {
+                return pattern.matcher(content).find() ? null : new MatchSpan(-1, -1, null);
+            }
+            var matcher = pattern.matcher(content);
+            if (!matcher.find()) {
+                return null;
+            }
+            return new MatchSpan(matcher.start(), matcher.end(), matcher.group());
         }
 
         private static RuleSeverity mapSeverity(String severity) {
@@ -106,5 +120,8 @@ public class RuleEngine implements ComplianceRuleEngine {
             }
             return "检测到「" + name + "」相关风险表述，建议法务复核。";
         }
+    }
+
+    private record MatchSpan(int start, int end, String text) {
     }
 }

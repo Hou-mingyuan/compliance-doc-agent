@@ -32,6 +32,7 @@ const nav = [
     <main class="content">
       <RouterView />
     </main>
+    <ToastHost />
   </div>
 </template>
 

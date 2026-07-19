@@ -116,6 +116,15 @@ public class ComplianceAuditStreamService {
         map.put("rule", rule.name());
         map.put("description", rule.message());
         map.put("location", rule.code());
+        boolean missing = rule.matchStart() != null && rule.matchStart() < 0;
+        map.put("kind", missing ? "missing" : "hit");
+        if (rule.matchedText() != null) {
+            map.put("matchedText", rule.matchedText());
+        }
+        if (rule.matchStart() != null && rule.matchStart() >= 0) {
+            map.put("matchStart", rule.matchStart());
+            map.put("matchEnd", rule.matchEnd());
+        }
         return map;
     }
 

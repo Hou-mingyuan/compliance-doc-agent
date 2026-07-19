@@ -2,13 +2,13 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type DocumentItem } from "../api";
+import { showToast } from "../toast";
 
 const router = useRouter();
 const documents = ref<DocumentItem[]>([]);
 const dragging = ref(false);
 const busy = ref(false);
 const loading = ref(true);
-const error = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 
 const accept = ".pdf,.doc,.docx,.txt,.md,.xlsx,.xls";
@@ -28,12 +28,11 @@ function formatSize(bytes: number) {
 
 async function load() {
   loading.value = true;
-  error.value = "";
   try {
     documents.value = await api.listDocuments();
   } catch {
     documents.value = [];
-    error.value = "加载文档列表失败，请稍后重试";
+    showToast("加载文档列表失败，请稍后重试");
   } finally {
     loading.value = false;
   }
@@ -42,14 +41,14 @@ async function load() {
 async function onFiles(files: FileList | null) {
   if (!files?.length || busy.value) return;
   busy.value = true;
-  error.value = "";
   try {
     for (const file of Array.from(files)) {
       await api.uploadDocument(file);
     }
     await load();
+    showToast(`已上传 ${files.length} 个文件`, "success", 2600);
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : "上传失败";
+    showToast(e instanceof Error ? e.message : "上传失败");
   } finally {
     busy.value = false;
     if (fileInput.value) fileInput.value.value = "";
@@ -103,8 +102,6 @@ onMounted(load);
         <div class="drop-hint">PDF · DOCX · XLSX · MD · TXT · 单文件建议 ≤ 20MB</div>
       </template>
     </div>
-
-    <p v-if="error" class="error-banner">{{ error }}</p>
 
     <section v-if="loading" class="list-section card" aria-busy="true">
       <h2>已上传文档</h2>
@@ -198,13 +195,6 @@ onMounted(load);
 .drop-icon { font-size: 40px; margin-bottom: 8px; }
 .drop-title { font-weight: 600; font-size: 16px; }
 .drop-hint { color: var(--muted); font-size: 13px; margin-top: 4px; }
-.error-banner {
-  padding: 12px 16px;
-  background: #fee2e2;
-  color: #991b1b;
-  border-radius: var(--radius);
-  margin-top: 16px;
-}
 .list-section { margin-top: 24px; padding: 20px; }
 .list-head {
   display: flex;

@@ -47,9 +47,59 @@ docker run --rm ^
 - Docker Compose 默认 Mock LLM，零密钥可完整演示审核链路。
 - 已提供 k6 smoke 脚本，覆盖只读 API 基线。
 
+## 实测结果（Docker Desktop · 2026-07-06）
+
+环境：`compliance-doc-agent-backend` @ `:8080`，k6 `host.docker.internal`，`VUS=20`，`DURATION=1m`，`THINK_TIME_SECONDS=1`。
+
+| 并发 VU | 时长 | 请求数 | 吞吐 (req/s) | P95 (fast) | 错误率 | 结论 |
+| ---: | --- | ---: | ---: | ---: | ---: | --- |
+| 20 | 1m | 2262 | 37.1 | **118.09 ms** | **0.00%** | 达标（<800ms） |
+| 20 | 30s (Round-6) | 1160 | — | **55.94 ms** | **0.00%** | project-hub-2 复跑 · 580 iter |
+
+checks 3393/3393 通过：`health ok`、`mock provider`、`documents ok`。
+
+## SSE audit Mock soak（2026-07-06）
+
+脚本：`scripts/sse-audit-soak.py` — 对 `POST /api/compliance/audit/stream/{docId}` 在 Mock LLM 下循环压测。
+
+```bash
+# 快速验证（60s）
+python scripts/sse-audit-soak.py --base http://127.0.0.1:8080 --duration 60
+
+# Round-5 长稳 soak（30 min）
+python scripts/sse-audit-soak.py --base http://127.0.0.1:8080 --duration 1800
+```
+
+**通过条件**：每轮 `start` ≥1 · `finding` ≥2 · `done` ≥1 · 无 `error` 事件；stdout 末尾 `SOAK_SUMMARY` JSON `allOk=true`。
+
+| 指标 | 说明 |
+| --- | --- |
+| `ttfbMs` | 首条 SSE 事件到达时间 |
+| `elapsedMs` | 单轮流结束耗时 |
+| `runs` | `--duration` 内完成的审核轮数 |
+| `p95ElapsedMs` / `p95TtfbMs` | Round-5 新增分位统计 |
+| `maxElapsedMs` | 单轮最大耗时 |
+
+### 60s 快速验证（2026-07-06 · project-hub-1）
+
+| duration | runs | allOk | avg TTFB | avg elapsed | p95 elapsed | p95 TTFB | max elapsed | errorRuns |
+| ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 60s | **104** | **true** | 77.0 ms | 77.5 ms | 207.8 ms | 206.9 ms | 339.7 ms | 0 |
+| **1800s** | **3140** | **true** | 68.9 ms | 69.6 ms | 176.7 ms | 174.1 ms | 2038.5 ms | 0 |
+
+### 30 min 长稳 soak（2026-07-06 · Round-5）
+
+完整日志：`docs/evidence/sse-soak-30min-20260706.log`
+
+```bash
+python scripts/sse-audit-soak.py --base http://127.0.0.1:8080 --duration 1800
+```
+
+> 墙钟 1800s 循环压测 Mock SSE 审核流；结果以日志末尾 `SOAK_SUMMARY` 为准。
+
 ## 后续优化
 
-- 对 `POST /api/compliance/audit/stream/{docId}` 增加独立 soak 测试（含 Mock LLM 流式）。
+- ~~对 `POST /api/compliance/audit/stream/{docId}` 增加独立 soak 测试~~ ✅ `sse-audit-soak.py`
 - 文档上传端点增加并发上传与 5MB 边界压测。
 - 生产环境在网关层增加分布式限流与 OpenTelemetry 指标。
 - 接入真实 LLM 后单独评估 token 延迟与超时配置（`LLM_TIMEOUT`）。
