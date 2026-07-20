@@ -1,130 +1,122 @@
-# compliance-doc-agent 部署与运维指南
+# Compliance Doc Agent 部署与运维
 
-本文档面向**本地演示**、**Docker Desktop 验证**与**生产化评估**。默认 Mock LLM 模式可在零密钥下完整体验「上传 → 规则命中 → SSE 审核 → 报告」链路。
+## 支持环境
 
-## 1. 部署形态
+- Docker Engine 26+ 或 Docker Desktop，Compose v2
+- 推荐至少 2 CPU、4GB 可用内存、2GB 可用磁盘
+- 本地开发另需 Java 17+、Maven 3.9+、Node.js 22+
+- 已验收的宿主环境为 Windows 11 + Docker Desktop；Compose 配置本身不依赖 Windows 路径
 
-| 形态 | 用途 | 说明 |
-| --- | --- | --- |
-| **Docker Compose dev（推荐）** | 演示 / CI | 后端 + Vite 热更新前端，默认 `LLM_PROVIDER=mock` |
-| **Docker Compose prod profile** | 静态前端预览 | Nginx 托管前端 + `/api` 反代，单端口 8080 |
-| **本地 Maven + Vite** | 开发调试 | H2 内存库，后端 8090 + 前端 5173 |
-| **生产** | 对外服务 | 需 HTTPS、托管 MySQL、真实 LLM 密钥、认证与限流 |
+本项目只使用 `19070-19079` 端口。默认前端为 `19070`，后端为 `19071`。
 
-## 2. Docker Compose 快速部署
+## 推荐启动
+
+在仓库根目录执行：
 
 ```bash
-cd compliance-doc-agent
-cp .env.example .env    # 默认 Mock，无需 LLM_API_KEY
+# Windows
+copy .env.example .env
+
+# Linux / macOS
+# cp .env.example .env
+
 docker compose up -d --build
 docker compose ps
-curl -f http://127.0.0.1:${BACKEND_HOST_PORT:-8080}/api/health
 ```
 
-访问：
+入口：
 
-| 入口 | 地址 |
+| 服务 | 地址 |
 | --- | --- |
-| 后端健康 | http://localhost:8080/api/health |
-| 前端（dev） | http://localhost:5173 |
+| 工作台 | http://127.0.0.1:19070 |
+| 后端健康检查 | http://127.0.0.1:19071/api/health |
 
-预期健康检查 JSON 含 `"llmProvider":"mock"`。
+`frontend/nginx.conf` 托管生产构建并将 `/api` 反代到后端。SSE 关闭代理缓冲，上传代理上限为 6MB，后端业务上限仍为 5MB。
 
-### 生产静态前端 profile
-
-```bash
-docker compose --profile prod up -d --build
-```
-
-统一入口：http://localhost:8080（Nginx → 静态资源 + `/api` 反代后端）。
-
-## 3. 本地开发部署
+首次构建完成后运行自动验收：
 
 ```bash
-# 终端 1 — 后端（H2 + Mock，端口 8090）
-cd backend && mvn spring-boot:run
-
-# 终端 2 — 前端（Vite proxy → 8090）
-cd frontend && npm install && npm run dev
+python scripts/verify-complete.py \
+  --base http://127.0.0.1:19070 \
+  --evidence-dir docs/evidence/docker-acceptance
 ```
 
-验证：
+成功时脚本退出码为 0，并生成 JSON 证据和实际 DOCX 报告；失败时退出码非 0 并写入失败原因。
+
+停止服务但保留数据：
 
 ```bash
-curl http://localhost:8090/api/health
+docker compose down
 ```
 
-## 4. 环境变量
+删除本地演示数据卷：
 
-| 变量 | 默认 | 说明 |
+```bash
+docker compose down -v
+```
+
+## 本地开发
+
+后端默认监听 `19071`：
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+前端默认监听 `19070`，并把 `/api` 代理到 `19071`：
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+如 `19070` 已被 Compose 占用，应先停止 Compose；不要改用允许范围之外的端口。
+
+## 配置
+
+| 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `LLM_PROVIDER` | `mock` | `mock` 零密钥；`openai` 接 OpenAI 兼容网关 |
-| `LLM_API_KEY` | （空） | 留空时使用 Mock |
-| `LLM_BASE_URL` | `https://api.openai.com/v1` | 兼容网关地址 |
-| `LLM_MODEL` | `gpt-4o-mini` | 模型名 |
-| `SPRING_DATASOURCE_URL` | H2 内存 | Docker 默认；生产换 MySQL JDBC |
-| `BACKEND_HOST_PORT` | `8080` | Compose 后端宿主端口 |
-| `FRONTEND_PORT` | `5173` / `8080` | dev 5173；prod profile 8080 |
+| `FRONTEND_PORT` | `19070` | 前端宿主端口 |
+| `BACKEND_HOST_PORT` | `19071` | 后端宿主端口 |
+| `SPRING_DATASOURCE_URL` | Compose 中的文件型 H2 | named volume 持久化演示数据 |
+| `LLM_PROVIDER` | `mock` | 零密钥文本整理模式 |
+| `LLM_API_KEY` | 空 | 仅真实 provider 使用 |
+| `DEMO_AUTH_ENABLED` | `true` | 本地演示身份；外部部署必须禁用 |
+| `DEMO_BCRYPT_STRENGTH` | `8` | 演示启动速度配置，允许范围 8-16 |
+| `CORS_ALLOWED_ORIGINS` | 两个本地 `19070` 地址 | 原生后端启动时的允许来源 |
 
-完整说明见 [.env.example](.env.example) 与 [docs/USAGE.md](docs/USAGE.md)。
+显式设置 `LLM_PROVIDER=openai` 但没有有效密钥时，健康状态会显示不可用，不会静默回退为 Mock。
 
-## 5. 健康检查与 smoke
-
-```bash
-# 健康
-curl -f http://127.0.0.1:8080/api/health
-
-# 文档列表（空库返回 []）
-curl -f http://127.0.0.1:8080/api/documents
-
-# 上传样例 + SSE 审核（记录返回 id 替换 {id}）
-curl -F "file=@backend/src/main/resources/samples/合同条款片段.txt" \
-     -F "docType=CONTRACT" \
-     http://127.0.0.1:8080/api/documents/upload
-
-curl -N -X POST -H "Accept: text/event-stream" \
-     http://127.0.0.1:8080/api/compliance/audit/stream/{id}
-```
-
-压测脚本见 [performance/k6-smoke.js](performance/k6-smoke.js) 与 [PERFORMANCE_REPORT.md](PERFORMANCE_REPORT.md)。
-
-## 6. 反向代理（HTTPS）
-
-生产建议在网关层终止 TLS 并限制来源 IP / 速率。SSE 端点 `/api/compliance/audit/stream/{docId}` 需：
-
-- 关闭响应缓冲（`proxy_buffering off`）
-- 适当延长 read timeout（Mock LLM 流式约 30–90s）
-
-prod profile 的 `frontend/nginx.conf` 已反代 `/api` → `backend:8080`。
-
-## 7. 升级与回滚
+## 健康与排障
 
 ```bash
-git pull
-docker compose up -d --build
-cd backend && mvn -B test
+curl -f http://127.0.0.1:19071/api/health
+docker compose logs --tail=200 backend
+docker compose logs --tail=100 frontend
 ```
 
-回滚：
+常见问题：
 
-1. 镜像使用 Git SHA 标签。
-2. 使用 MySQL 时发布前备份卷或逻辑备份。
-3. `docker compose down` 后回退到上一版本镜像并 `up -d`。
-
-## 8. 运维 Runbook
-
-| 现象 | 处理 |
+| 现象 | 判断与处理 |
 | --- | --- |
-| 前端无法连后端 | 确认端口：本地 dev 8090，Docker 8080；检查 `VITE_PROXY_TARGET` |
-| SSE 无输出 | 检查 `Accept: text/event-stream`；查看后端日志与 `documentId` 是否存在 |
-| 规则未命中 | 使用 `samples/合同条款片段.txt` 验证；见 USAGE.md 预期规则表 |
-| 切换真实 LLM 失败 | 确认 `LLM_PROVIDER=openai` 与有效 `LLM_API_KEY`；检查网关 URL |
+| 前端返回 `502` | 等待后端 `healthy`，再检查后端日志 |
+| 上传返回 `413` | 文件超过 5MB；压缩文件或拆分文档后重试 |
+| 扫描 PDF 被拒绝 | 当前未集成 OCR，请上传可选择文本的 PDF |
+| 登录返回 `401` | 检查演示账户密码与 `DEMO_AUTH_ENABLED` |
+| 同文档重复发起返回 `409` | 已有运行中审核，打开现有运行或先取消 |
+| 报告下载失败 | 使用审核员以上角色，并确认资源属于当前租户 |
 
-## 9. 相关文档
+所有 5xx 响应都带 `X-Request-Id`，可用该值关联日志。日志和问题单不得附带原始客户文档、凭据或密钥。
 
-| 文档 | 说明 |
-| --- | --- |
-| [README.md](README.md) | 项目概览与演示流程 |
-| [docs/USAGE.md](docs/USAGE.md) | Mock 零密钥详细体验路径 |
-| [SECURITY.md](SECURITY.md) | 安全策略与漏洞报告 |
-| [PERFORMANCE_REPORT.md](PERFORMANCE_REPORT.md) | 压测目标与脚本 |
+## 外部部署边界
+
+当前 Compose 是可复现的本地发布候选环境，不是无条件生产部署方案。外部部署前至少需要：
+
+- 设置 `DEMO_AUTH_ENABLED=false` 并接入正式身份源；当前演示 Basic Auth 不应经明文 HTTP 暴露
+- 使用经过验证的生产数据库、备份恢复、密钥管理、HTTPS、限流和恶意文件扫描
+- 获得权威法规数据授权并替换 DEMO 法规集
+- 根据数据分级确定文档、报告和审计记录的保留与删除策略
+
+默认 H2 卷适合本地演示和验收，不作为生产数据库可用性结论。

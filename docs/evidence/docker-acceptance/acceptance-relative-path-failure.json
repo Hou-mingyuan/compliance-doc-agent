@@ -1,0 +1,8 @@
+{
+  "status": "FAIL",
+  "generatedAt": "2026-07-20T02:51:20.325359+00:00",
+  "baseUrl": "http://127.0.0.1:19070",
+  "elapsedSeconds": 25.685,
+  "errorType": "ValueError",
+  "message": "'docs\\\\evidence\\\\docker-acceptance\\\\acceptance-report.docx' is not in the subpath of 'D:\\\\project-hub\\\\compliance-doc-agent'"
+}

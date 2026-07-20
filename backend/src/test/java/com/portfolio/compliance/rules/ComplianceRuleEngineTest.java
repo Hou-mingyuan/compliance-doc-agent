@@ -59,4 +59,12 @@ class ComplianceRuleEngineTest {
         var hits = engine.evaluate(null);
         assertTrue(hits.stream().anyMatch(r -> "EMPTY_CONTENT".equals(r.code())));
     }
+
+    @Test
+    void contractDoesNotRunPolicyOrDisclosureMissingRules() {
+        var hits = engine.evaluate("本合同经双方签字盖章，争议提交仲裁。双方承担保密义务。", "CONTRACT");
+        assertFalse(hits.stream().anyMatch(r -> "R-POL-001".equals(r.code())));
+        assertFalse(hits.stream().anyMatch(r -> "R-DISC-001".equals(r.code())));
+        assertEquals("1.0.0", engine.packVersion());
+    }
 }

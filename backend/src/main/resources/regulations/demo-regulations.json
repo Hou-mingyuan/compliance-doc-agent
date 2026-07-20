@@ -1,0 +1,67 @@
+[
+  {
+    "code": "DEMO-CONTRACT-DISPUTE-001",
+    "title": "演示合同争议解决规范",
+    "versionLabel": "DEMO-2026.1",
+    "effectiveDate": "2026-01-01",
+    "expiryDate": null,
+    "scope": "CONTRACT",
+    "sourceName": "Compliance Doc Agent 脱敏演示法规集（非权威）",
+    "sourceUrl": null,
+    "articleNo": "第12条",
+    "content": "工程演示条款：合同应明确争议解决方式、机构或有管辖权的法院，避免同时约定互相冲突的路径。",
+    "keywords": "争议解决 仲裁 诉讼 管辖 法院"
+  },
+  {
+    "code": "DEMO-CONTRACT-LIABILITY-001",
+    "title": "演示合同责任边界规范",
+    "versionLabel": "DEMO-2026.1",
+    "effectiveDate": "2026-01-01",
+    "expiryDate": null,
+    "scope": "CONTRACT",
+    "sourceName": "Compliance Doc Agent 脱敏演示法规集（非权威）",
+    "sourceUrl": null,
+    "articleNo": "第18条",
+    "content": "工程演示条款：责任限制与免责表述应明确、对等，不应以无限责任、免除全部责任或放弃追索替代具体责任边界。",
+    "keywords": "责任 免责 无限责任 无限连带 放弃追索"
+  },
+  {
+    "code": "DEMO-PRIVACY-MINIMIZATION-001",
+    "title": "演示个人信息最小化规范",
+    "versionLabel": "DEMO-2026.2",
+    "effectiveDate": "2026-03-01",
+    "expiryDate": null,
+    "scope": "GENERAL",
+    "sourceName": "Compliance Doc Agent 脱敏演示法规集（非权威）",
+    "sourceUrl": null,
+    "articleNo": "第6条",
+    "content": "工程演示条款：处理个人信息应限定明确目的、最小必要范围、保存期限和删除方式，测试材料不得包含真实证件号码。",
+    "keywords": "个人信息 身份证 证件 最小必要 保存期限 删除"
+  },
+  {
+    "code": "DEMO-POLICY-PROCUREMENT-001",
+    "title": "演示采购审批内规",
+    "versionLabel": "DEMO-2026.1",
+    "effectiveDate": "2026-01-01",
+    "expiryDate": "2027-12-31",
+    "scope": "POLICY",
+    "sourceName": "Compliance Doc Agent 脱敏演示内规集（非真实企业制度）",
+    "sourceUrl": null,
+    "articleNo": "第9条",
+    "content": "工程演示条款：采购制度应说明适用范围、分级审批、利益冲突申报和留痕要求；超过演示阈值的事项需要复核。",
+    "keywords": "采购 审批 适用范围 利益冲突 留痕"
+  },
+  {
+    "code": "DEMO-CONTRACT-RENEWAL-001",
+    "title": "演示自动续期提示规范",
+    "versionLabel": "DEMO-2026.1",
+    "effectiveDate": "2026-01-01",
+    "expiryDate": null,
+    "scope": "CONTRACT",
+    "sourceName": "Compliance Doc Agent 脱敏演示法规集（非权威）",
+    "sourceUrl": null,
+    "articleNo": "第21条",
+    "content": "工程演示条款：自动续期应明确续期周期、提前通知期限和便捷退出方式，不应以沉默推定无限续约。",
+    "keywords": "自动续期 自动延长 续约 通知期限 退出"
+  }
+]

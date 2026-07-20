@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Compliance Doc Agent">
+  <rect width="64" height="64" rx="14" fill="#123431"/>
+  <path d="M18 12h21l9 9v31H18z" fill="#f5faf8"/>
+  <path d="M39 12v10h9" fill="#b9d9d2"/>
+  <path d="M32 27l10 4v7c0 7-4.2 11.8-10 14-5.8-2.2-10-7-10-14v-7z" fill="#177f73"/>
+  <path d="m27.5 38 3 3 6.5-7" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/>
+</svg>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AlertTriangle, CheckCircle2, Info, X } from "@lucide/vue";
 import { dismissToast, useToastState } from "../toast";
 
 const toasts = useToastState();
@@ -13,9 +14,13 @@ const toasts = useToastState();
         :class="['toast-item', `toast-${t.type}`]"
         role="alert"
       >
-        <span class="toast-icon">{{ t.type === "error" ? "✕" : t.type === "success" ? "✓" : "ℹ" }}</span>
+        <span class="toast-icon">
+          <AlertTriangle v-if="t.type === 'error'" :size="17" />
+          <CheckCircle2 v-else-if="t.type === 'success'" :size="17" />
+          <Info v-else :size="17" />
+        </span>
         <span class="toast-msg">{{ t.message }}</span>
-        <button class="toast-close" aria-label="关闭" @click="dismissToast(t.id)">×</button>
+        <button class="toast-close" aria-label="关闭" @click="dismissToast(t.id)"><X :size="15" /></button>
       </div>
     </transition-group>
   </div>
@@ -38,16 +43,16 @@ const toasts = useToastState();
   align-items: flex-start;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  border-radius: 4px;
+  box-shadow: var(--shadow-lg);
   border: 1px solid transparent;
   pointer-events: auto;
   font-size: 13px;
   line-height: 1.5;
 }
-.toast-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
-.toast-success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
-.toast-info { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+.toast-error { background: var(--red-50); border-color: var(--red-300); color: var(--red-700); }
+.toast-success { background: var(--green-50); border-color: var(--green-200); color: var(--green-800); }
+.toast-info { background: var(--paper); border-color: var(--line-strong); color: var(--ink-700); }
 .toast-icon { font-weight: 700; flex-shrink: 0; width: 18px; text-align: center; }
 .toast-msg { flex: 1; word-break: break-word; }
 .toast-close {
@@ -56,9 +61,8 @@ const toasts = useToastState();
   color: inherit;
   opacity: 0.6;
   cursor: pointer;
-  font-size: 18px;
   line-height: 1;
-  padding: 0 2px;
+  padding: 1px;
 }
 .toast-close:hover { opacity: 1; }
 .toast-enter-active,

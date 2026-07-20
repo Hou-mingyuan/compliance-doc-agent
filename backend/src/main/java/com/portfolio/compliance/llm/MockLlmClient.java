@@ -9,7 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.compliance.agent.tool.ToolNames;
 
 /**
- * 离线内置模型：无需 API Key 即可跑通「工具调用 → 结构化 findings → 流式摘要」全链路。
+ * 离线文本替身：只把确定性工具摘要组织为可预测叙事，不生成审核 findings。
  */
 public class MockLlmClient implements LlmClient {
 
@@ -77,8 +77,7 @@ public class MockLlmClient implements LlmClient {
 
     private String buildArgs(String tool, String user) {
         Map<String, Object> args = new LinkedHashMap<>();
-        args.put("doc_content", user);
-        args.put("doc_id", "mock-doc-1");
+        args.put("doc_id", 0);
         switch (tool) {
             case ToolNames.COMPARE_CLAUSE -> {
                 args.put("clause_ref", "争议解决");
@@ -102,10 +101,10 @@ public class MockLlmClient implements LlmClient {
 
     private String composeWithoutTools(String user) {
         return """
-                【Mock 合规分析摘要】
-                文档已收到。配置 LLM_API_KEY 后可启用真实 Function Calling 深度审查。
+                【Mock 文本整理模式】
+                未提供确定性工具结果，因此不生成新的审核发现。
 
-                用户输入摘要：%s
+                请求摘要：%s
                 """.formatted(truncate(user, 120));
     }
 
@@ -116,12 +115,12 @@ public class MockLlmClient implements LlmClient {
                 .toList();
         if (!toolSummaries.isEmpty()) {
             return """
-                    【Mock 合规分析摘要】
-                    已通过 Function Calling 工具链完成审查：
+                    【Mock 文本整理模式】
+                    以下内容仅整理系统已验证的工具结果，不新增事实或法律结论：
 
                     %s
 
-                    建议：结合 findings 列表逐项确认并发起整改任务。
+                    建议：由人工审核人逐项确认风险、依据与整改证据。本结果不替代律师意见。
                     """.formatted(String.join("\n", toolSummaries));
         }
         return composeWithoutTools(lastUser(request));

@@ -1,12 +1,21 @@
 package com.portfolio.compliance.agent;
 
-import java.util.List;
-import java.util.function.Consumer;
+import com.portfolio.compliance.agent.tool.ToolResult;
+import com.portfolio.compliance.workflow.ReviewStore.FindingRecord;
 
-/** SSE 流式审核回调：规则命中与 LLM token。 */
 public interface AuditStreamCallbacks {
 
-    void onFinding(com.portfolio.compliance.rules.ComplianceRule rule);
+    void onFinding(FindingRecord finding);
 
     void onToken(String token);
+
+    default void onTool(String toolName, ToolResult result) {
+    }
+
+    default void onStage(String stage, String message) {
+    }
+
+    default boolean isCancelled() {
+        return false;
+    }
 }

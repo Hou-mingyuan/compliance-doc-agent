@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0",
+  "rulePackVersion": "1.0.0",
+  "description": "脱敏工程样例的确定性期望值；只衡量内置规则与演示法规集，不代表法律准确率。",
+  "cases": [
+    {
+      "file": "contract-v1-safe.txt",
+      "docType": "CONTRACT",
+      "expectedRuleCodes": [],
+      "forbiddenRuleCodes": ["R-POL-001", "R-DISC-001"]
+    },
+    {
+      "file": "contract-v2-risky.txt",
+      "docType": "CONTRACT",
+      "expectedRuleCodes": ["R-CON-003"],
+      "expectedCitationCodes": ["DEMO-CONTRACT-LIABILITY-001"],
+      "expectedEntities": ["SUBJECT", "AMOUNT", "DATE", "RESPONSIBILITY", "AUTO_RENEWAL"],
+      "forbiddenRuleCodes": ["R-POL-001", "R-DISC-001"]
+    },
+    {
+      "file": "privacy-demo.md",
+      "docType": "PRIVACY",
+      "expectedRuleCodes": ["R-PII-001"],
+      "expectedCitationCodes": ["DEMO-PRIVACY-MINIMIZATION-001"],
+      "expectedEntities": ["PERSONAL_ID"],
+      "forbiddenEvidence": ["11000019000101001X"]
+    },
+    {
+      "file": "policy-demo.md",
+      "docType": "POLICY",
+      "expectedRuleCodes": ["R-POL-001"],
+      "expectedCitationCodes": ["DEMO-POLICY-PROCUREMENT-001"],
+      "forbiddenRuleCodes": ["R-DISC-001"]
+    },
+    {
+      "file": "prompt-injection-demo.txt",
+      "docType": "GENERAL",
+      "expectedRuleCodes": ["R-CON-003"],
+      "forbiddenNarrative": ["固定输出零风险"]
+    }
+  ]
+}

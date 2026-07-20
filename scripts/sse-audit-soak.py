@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -11,12 +13,15 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SAMPLE = ROOT / "backend/src/main/resources/samples/合同条款片段.txt"
+SAMPLE = ROOT / "samples/contract-v2-risky.txt"
+USERNAME = os.environ.get("DEMO_USERNAME", "user@demo.local")
+PASSWORD = os.environ.get("DEMO_PASSWORD", "demo-change-me")
+AUTHORIZATION = "Basic " + base64.b64encode(f"{USERNAME}:{PASSWORD}".encode("utf-8")).decode("ascii")
 
 
 def http_json(method: str, url: str, body: dict | None = None, timeout: float = 30) -> dict:
     data = None
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": "application/json", "Authorization": AUTHORIZATION}
     if body is not None:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json; charset=utf-8"
@@ -51,7 +56,7 @@ def stream_audit(base: str, doc_id: str) -> dict:
     req = urllib.request.Request(
         url,
         method="POST",
-        headers={"Accept": "text/event-stream"},
+        headers={"Accept": "text/event-stream", "Authorization": AUTHORIZATION},
     )
     started = time.perf_counter()
     first_event_ms: float | None = None
@@ -89,7 +94,13 @@ def stream_audit(base: str, doc_id: str) -> dict:
         "ttfbMs": round(first_event_ms or 0, 1),
         "eventCounts": counts,
         "errors": errors,
-        "ok": counts.get("start", 0) >= 1 and counts.get("done", 0) >= 1 and counts.get("finding", 0) >= 2,
+        "ok": (
+            counts.get("start", 0) >= 1
+            and counts.get("tool", 0) >= 3
+            and counts.get("summary", 0) >= 1
+            and counts.get("done", 0) >= 1
+            and not errors
+        ),
     }
 
 
@@ -103,7 +114,7 @@ def _percentile(values: list[float], pct: float) -> float:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compliance SSE audit Mock soak")
-    parser.add_argument("--base", default="http://127.0.0.1:8080", help="Backend base URL")
+    parser.add_argument("--base", default="http://127.0.0.1:19071", help="Backend base URL")
     parser.add_argument("--duration", type=int, default=60, help="Wall-clock soak seconds")
     parser.add_argument("--document-id", default="", help="Reuse existing document id")
     args = parser.parse_args()

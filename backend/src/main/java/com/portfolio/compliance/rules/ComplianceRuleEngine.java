@@ -8,6 +8,10 @@ public interface ComplianceRuleEngine {
     /** 对文档正文执行全部已加载规则，返回命中项（无命中时返回空列表）。 */
     List<ComplianceRule> evaluate(String content);
 
+    List<ComplianceRule> evaluate(String content, String documentType);
+
     /** 当前已加载的内置/外部规则条数，便于监控与测试断言。 */
     int ruleCount();
+
+    String packVersion();
 }

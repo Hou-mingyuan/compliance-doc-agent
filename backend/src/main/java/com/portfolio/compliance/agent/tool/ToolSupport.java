@@ -33,6 +33,31 @@ public final class ToolSupport {
         m.put("type", "object");
         m.put("properties", properties);
         m.put("required", required);
+        m.put("additionalProperties", false);
         return m;
+    }
+
+    public static Long longValue(Map<String, Object> args, String key) {
+        String value = str(args, key);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    public static Integer intValue(Map<String, Object> args, String key, int defaultValue) {
+        String value = str(args, key);
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException ex) {
+            return defaultValue;
+        }
     }
 }

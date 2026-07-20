@@ -15,6 +15,9 @@ public class ComplianceDocumentChunk {
     private Long id;
     private Long documentId;
     private Integer chunkIndex;
+    private Integer pageNo;
+    private String sectionTitle;
+    private Integer paragraphNo;
     private String content;
     private Integer charStart;
     private Integer charEnd;

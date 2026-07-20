@@ -1,17 +1,11 @@
 # compliance-doc-agent · Docker Compose
 #
-# Mock 零密钥一键启动（后端 + Vite 热更新前端）：
+# Mock 零密钥一键启动（后端 + Nginx 静态前端）：
 #   docker compose up -d --build
 #
-# 生产模式（Nginx 托管静态前端，单端口 8080）：
-#   docker compose --profile prod up -d --build
-#
-# 端口（默认 dev 栈）：
-#   后端 API  http://localhost:8080/api/health
-#   前端界面  http://localhost:5173
-#
-# 端口（--profile prod）：
-#   统一入口  http://localhost:8080  （Nginx → 静态 + /api 反代）
+# 端口：
+#   后端 API  http://localhost:19071/api/health
+#   前端界面  http://localhost:19070
 
 services:
   backend:
@@ -20,14 +14,14 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     expose:
-      - "8080"
+      - "19071"
     ports:
-      - "${BACKEND_HOST_PORT:-8080}:8080"
+      - "${BACKEND_HOST_PORT:-19071}:19071"
     volumes:
       - h2data:/data
     environment:
-      SERVER_PORT: 8080
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:h2:mem:compliance;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1}
+      SERVER_PORT: 19071
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:h2:file:/data/compliance;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_ON_EXIT=FALSE}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.h2.Driver
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-sa}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-}
@@ -37,44 +31,29 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
       LLM_TIMEOUT: ${LLM_TIMEOUT:-90}
+      DEMO_AUTH_ENABLED: ${DEMO_AUTH_ENABLED:-true}
+      DEMO_BCRYPT_STRENGTH: ${DEMO_BCRYPT_STRENGTH:-8}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-demo-change-me}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-admin-change-me}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:19071/api/health"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 45s
 
-  frontend-dev:
-    image: node:22-alpine
-    working_dir: /app
-    restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
-    ports:
-      - "${FRONTEND_PORT:-5173}:5173"
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-    environment:
-      VITE_PROXY_TARGET: http://backend:8080
-    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0 --port 5173"]
-
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    profiles: ["prod"]
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
-    # Nginx 反代 /api → backend:8080（见 frontend/nginx.conf）
+      - "${FRONTEND_PORT:-19070}:19070"
+    # Nginx 反代 /api → backend:19071（见 frontend/nginx.conf）
 
 volumes:
   h2data:
-    driver: local
-  frontend_node_modules:
     driver: local

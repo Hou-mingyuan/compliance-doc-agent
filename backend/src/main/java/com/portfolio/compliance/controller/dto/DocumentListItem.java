@@ -9,16 +9,26 @@ public record DocumentListItem(
         long size,
         String contentType,
         String status,
-        String uploadedAt) {
+        String uploadedAt,
+        String docType,
+        String tenantId,
+        int pageCount,
+        int versionNo,
+        Long parentDocumentId) {
 
     public static DocumentListItem from(ComplianceDocumentView doc) {
         return new DocumentListItem(
                 String.valueOf(doc.id()),
                 doc.title(),
                 doc.contentLength(),
-                doc.docType() != null ? doc.docType().toLowerCase() : "general",
+                doc.fileFormat() != null ? doc.fileFormat() : "txt",
                 mapStatus(doc.status()),
-                doc.createdAt() != null ? doc.createdAt().toString() : "");
+                doc.createdAt() != null ? doc.createdAt().toString() : "",
+                doc.docType(),
+                doc.tenantId(),
+                doc.pageCount() == null ? 0 : doc.pageCount(),
+                doc.versionNo() == null ? 1 : doc.versionNo(),
+                doc.parentDocumentId());
     }
 
     private static String mapStatus(String backendStatus) {
@@ -26,8 +36,11 @@ public record DocumentListItem(
             return "uploaded";
         }
         return switch (backendStatus.toUpperCase()) {
-            case "AUDITING" -> "auditing";
-            case "DONE" -> "done";
+            case "REVIEWING", "RUNNING", "AUDITING" -> "auditing";
+            case "PENDING_REVIEW" -> "pending_review";
+            case "REMEDIATION" -> "remediation";
+            case "APPROVED", "DONE" -> "done";
+            case "CANCELLED" -> "cancelled";
             case "FAILED" -> "failed";
             default -> "uploaded";
         };
@@ -37,8 +50,13 @@ public record DocumentListItem(
             Long id,
             String title,
             String docType,
+            String fileFormat,
             String status,
             int contentLength,
+            String tenantId,
+            Integer pageCount,
+            Integer versionNo,
+            Long parentDocumentId,
             LocalDateTime createdAt) {
     }
 }

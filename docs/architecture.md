@@ -1,270 +1,134 @@
-# compliance-doc-agent 系统架构
+# Compliance Doc Agent 系统架构
 
-> 面向内审 / 合规 / 法务场景的文档智能审核系统：**规则引擎硬校验** + **LLM Agent 语义审查**双层把关，Function Calling 工具链驱动深度分析，SSE 流式推送审核进度。
+## 目标与边界
 
-| 字段 | 内容 |
-| --- | --- |
-| 项目 | `compliance-doc-agent` |
-| 后端 | Java 17 + Spring Boot 3 |
-| 前端 | Vue 3 + Vite + TypeScript |
-| 更新 | 2026-07-04 |
+系统把上传文档转为可定位证据，执行确定性规则、法规目录检索、版本比较和实体抽取，再由人工完成风险判断、整改、复审和报告导出。
 
----
+默认 Mock LLM 只组织工具摘要。风险项由工具根据输入生成并持久化，模型不能直接写入 findings，也不能替代人工法律判断。
 
-## 1. 双层审核架构总览
-
-系统采用 **规则层（确定性）** 与 **Agent 层（语义 + 工具）** 协作的双层架构：
-
-- **规则层**：加载 `rules/default-rules.json`，基于正则 / 关键词对全文做初筛，输出结构化 `ComplianceRule` 命中项，保证底线合规、可解释、可单测。
-- **Agent 层**：`ComplianceAgentOrchestrator` 将规则初筛结果注入 LLM 上下文，通过 Function Calling 自主调用 8 个工具（法规检索、条款对比、风险汇总等），最多 5 轮工具循环，产出 `ComplianceFinding` 与 narrative 摘要。
-
-```mermaid
-flowchart TB
-    subgraph Client["前端 (Vue 3)"]
-        Upload["文档上传"]
-        Workbench["审核工作台"]
-        Report["报告详情"]
-    end
-
-    subgraph API["Spring MVC"]
-        REST["REST API<br/>/api/documents · /api/analyze"]
-        SSE["SSE 流<br/>POST /api/compliance/audit/stream/{docId}"]
-    end
-
-    subgraph Layer1["第一层 · 规则引擎 (确定性)"]
-        RE["RuleEngine"]
-        Rules["default-rules.json<br/>正则 / 缺失关键词"]
-        RE --> Rules
-    end
-
-    subgraph Layer2["第二层 · LLM Agent (语义 + 工具)"]
-        Orch["ComplianceAgentOrchestrator"]
-        LLM["LlmClient<br/>OpenAI 兼容 / Mock"]
-        TR["ToolRegistry"]
-        Tools["8 × AgentTool<br/>Function Calling"]
-        Orch --> LLM
-        Orch --> TR --> Tools
-        Tools -.->|"check_rules 复用"| RE
-    end
-
-    subgraph Persist["持久层"]
-        DB[("MySQL / H2")]
-        Doc["ComplianceDocument"]
-        Check["ComplianceCheck"]
-    end
-
-    Upload --> REST
-    Workbench --> SSE
-    REST --> Orch
-    SSE --> Orch
-
-    Orch -->|"① 初筛"| RE
-    RE -->|"ruleHits"| Orch
-    Orch -->|"② 多轮 chat + tool_calls"| LLM
-
-    REST --> Doc
-    SSE --> Doc
-    Orch --> Check
-    Doc --> DB
-    Check --> DB
-
-    Report --> REST
-```
-
-### 1.1 审核数据流
-
-| 阶段 | 组件 | 输入 | 输出 |
-| --- | --- | --- | --- |
-| ① 规则初筛 | `RuleEngine.evaluate()` | 文档正文 | `List<ComplianceRule>` |
-| ② Prompt 组装 | `ComplianceAgentOrchestrator` | 标题 + 正文 + 规则摘要 | `ChatMsg` 消息链 |
-| ③ 工具循环 | `ToolRegistry.execute()` | LLM `tool_calls` | `ToolResult` → `ComplianceFinding` |
-| ④ 结果聚合 | Orchestrator | ruleHits + findings + toolTrace | `AgentAnalysisResult` |
-| ⑤ 持久化 | `ComplianceCheckMapper` | 规则命中 | DB 留痕 |
-
-### 1.2 核心类职责
-
-| 类 | 包路径 | 职责 |
-| --- | --- | --- |
-| `RuleEngine` | `rules` | 加载 JSON 规则包，正则匹配 / 缺失关键词检测 |
-| `ComplianceAgentOrchestrator` | `agent` | 规则初筛 + LLM 多轮工具编排（`MAX_TOOL_ROUNDS = 5`） |
-| `ToolRegistry` | `agent.tool` | 聚合 8 个 `AgentTool`，提供 Schema 与按名执行 |
-| `ComplianceAgentToolStubs` | `agent.tool.stub` | Mock 模式下的 8 工具实现 |
-| `ComplianceAuditStreamService` | `service` | SSE 流式审核，推送 finding / token / summary |
-| `ComplianceAnalysisService` | `service` | 同步 REST 分析入口 |
-
----
-
-## 2. SSE 流式审核时序
-
-前端通过 `POST /api/compliance/audit/stream/{documentId}` 发起审核，后端以 **Server-Sent Events** 推送进度。事件顺序：`start` → `finding*` → `token*` → `summary` → `done`（异常时 `error`）。
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant FE as 前端 (Vue)
-    participant Ctrl as ComplianceAuditController
-    participant Svc as ComplianceAuditStreamService
-    participant Orch as ComplianceAgentOrchestrator
-    participant RE as RuleEngine
-    participant LLM as LlmClient
-    participant TR as ToolRegistry
-    participant DB as 数据库
-
-    FE->>Ctrl: POST /api/compliance/audit/stream/{docId}<br/>Accept: text/event-stream
-    Ctrl->>Svc: streamAudit(docId)
-    Svc-->>FE: SseEmitter (120s timeout)
-
-    Svc->>DB: selectById(docId)
-    alt 文档不存在 / 内容为空
-        Svc-->>FE: event: error
-        Svc-->>FE: emitter.complete()
-    end
-
-    Svc->>DB: update status = AUDITING
-    Svc-->>FE: event: start { auditId, documentId }
-
-    Svc->>Orch: analyzeStream(title, content, callbacks)
-
-    Orch->>RE: evaluate(content)
-    RE-->>Orch: ruleHits[]
-
-    loop 每条规则命中
-        Orch->>Svc: callbacks.onFinding(rule)
-        Svc-->>FE: event: finding { severity, rule, description, location }
-    end
-
-    loop LLM 工具循环 (≤5 轮)
-        Orch->>LLM: chat(messages, toolSpecs)
-        alt 有 tool_calls
-            LLM-->>Orch: toolCalls[]
-            loop 每个 tool_call
-                Orch->>TR: execute(name, args)
-                TR-->>Orch: ToolResult
-            end
-        else 无 tool_calls
-            LLM-->>Orch: content (narrative)
-        end
-        opt 流式 token
-            Orch->>Svc: callbacks.onToken(token)
-            Svc-->>FE: event: token { text }
-        end
-    end
-
-    Orch-->>Svc: narrative
-
-    Svc->>DB: persistRuleHits → ComplianceCheck
-    Svc-->>FE: event: summary { text }
-    Svc-->>FE: event: done { auditId, summary }
-    Svc->>DB: update status = DONE
-    Svc-->>FE: emitter.complete()
-```
-
-### 2.1 SSE 事件契约
-
-| 事件名 | 触发时机 | Payload 字段 |
-| --- | --- | --- |
-| `start` | 审核开始 | `auditId`, `documentId` |
-| `finding` | 规则引擎命中 | `severity`, `rule`, `description`, `location` |
-| `token` | LLM 流式输出片段 | `text` |
-| `summary` | 审核摘要 | `text` |
-| `done` | 审核完成 | `auditId`, `summary` |
-| `error` | 异常 / 校验失败 | `message` |
-
-### 2.2 前端消费
-
-`frontend/src/api.ts` 中 `streamAudit()` 使用 `fetch` + `ReadableStream` 解析 SSE 帧，按 `event:` / `data:` 行分发至 `onEvent` 回调。
-
----
-
-## 3. Function Calling 工具表（8 个）
-
-所有工具通过 `ToolRegistry` 注册，LLM 以 OpenAI Function Calling 格式调用。Mock 模式下由 `ComplianceAgentToolStubs` 返回结构化 stub 数据。
-
-| # | 工具名 | 说明 | 必填参数 | 主要返回 |
-| --- | --- | --- | --- | --- |
-| 1 | `check_rules` | 对文档正文执行规则包硬校验，返回结构化命中项 | `doc_content` | `findings[]`, `count` |
-| 2 | `compare_clause` | 对比两个版本文档的指定条款差异 | `doc_id`, `clause_ref` | 条款 diff findings |
-| 3 | `summarize_risks` | 汇总发现项并计算综合风险等级 | `doc_id` | `riskScore`, `riskLevel`, `summary` |
-| 4 | `search_regulation` | 检索法规 / 内规库中的相关条文 | `keyword` | `regulations[]` |
-| 5 | `get_document_section` | 按章节或页码获取文档原文片段 | `doc_id` | `sectionId`, `text`, `pageNo` |
-| 6 | `extract_entities` | 从文档中抽取甲乙方、金额、日期等关键实体 | `doc_id` | `partyA`, `partyB`, `amount`, … |
-| 7 | `generate_audit_report` | 生成审核报告（PDF / Word / Markdown） | `doc_id`, `format` | `reportId`, `url`, `status` |
-| 8 | `create_remediation_task` | 为指定发现项创建整改任务 | `doc_id`, `finding_id` | `taskId`, `status`, `assignee` |
-
-### 3.1 工具与规则引擎的关系
-
-- `check_rules` 内部直接调用 `RuleEngine.evaluate()`，与 Orchestrator 启动时的初筛逻辑一致，允许 Agent 在对话中**按需复验**。
-- 其余 7 个工具当前为 Mock stub，生产环境可替换为真实法规库、文档存储、工单系统集成。
-
-### 3.2 Agent 工具循环
+## 运行结构
 
 ```text
-for round in 0..MAX_TOOL_ROUNDS-1:
-    request = LlmChatRequest(messages, toolSpecs)
-    request.allowTools = (round < MAX_TOOL_ROUNDS - 1)
-    result = llm.chat(request)
-
-    if not result.hasToolCalls():
-        return AgentAnalysisResult(...)
-
-    messages += assistantToolCalls(result.toolCalls)
-    for call in result.toolCalls:
-        args = parseArgs(call.arguments)
-        args.setdefault("doc_content", content)
-        args.setdefault("doc_title", title)
-        tr = toolRegistry.execute(call.name, args)
-        collectFindings(tr, findings)
-        messages += tool(call.id, call.name, tr.summary)
+Browser :19070
+  -> Nginx static frontend
+  -> /api reverse proxy
+Spring Boot :19071
+  -> Security / tenant context / request id
+  -> Document parser + locator
+  -> Review workflow + deterministic tool orchestrator
+  -> Regulation catalog + rule engine + entity / clause analysis
+  -> Remediation + report + audit trail
+  -> H2 file database (local RC)
 ```
 
----
+前端是 Vue 3 单页工作台，包含文档、审核、整改、演示法规和审计视图。后端使用 Spring Boot 3、Spring Security、JDBC/MyBatis-Plus、Apache PDFBox、Apache POI 和 H2。
 
-## 4. 规则引擎设计
+## 核心数据流
 
-规则包位于 `backend/src/main/resources/rules/default-rules.json`，启动时由 `RuleEngine` 加载为内存 `LoadedRule` 列表。
+1. 上传服务校验大小、扩展名、签名和容器结构，计算 SHA-256。
+2. 解析器生成正文与页码、章节、段落、字符 span；分块记录可回到原文。
+3. 审核状态由 `CREATED` 原子转换为 `RUNNING`，同文档只允许一个活动运行。
+4. 编排器使用服务端 `ToolContext` 执行规则、实体、版本、法规、定位和汇总工具。
+5. 工具结果、findings、实体、引用和执行轨迹在同一审核运行下持久化。
+6. Mock 或真实 LLM 只能根据已完成工具输出生成叙述；失败不会伪造风险或法规。
+7. SSE 推送阶段、工具、风险、叙述和汇总，最终进入 `PENDING_REVIEW`。
+8. 人工将每条风险标记为误报或确认；确认项可进入整改任务闭环。
+9. 已解决风险完成复审后才能批准；报告从审核快照生成并保存内容哈希。
+10. 所有关键转换写入按租户串联的审计哈希链。
 
-| 机制 | 说明 |
-| --- | --- |
-| 正则命中 | `pattern.matcher(content).find()` → 生成 WARNING / ERROR |
-| 缺失关键词 | 规则名含「缺失」时，**未匹配** pattern 即命中 |
-| 空文档 | 固定返回 `EMPTY_CONTENT` / ERROR |
-| 严重度映射 | JSON `HIGH` → ERROR，`LOW` → INFO，其余 → WARNING |
+## 深模块
 
-内置规则示例：`R-CON-001` 缺失争议解决条款、`R-CON-003` 禁止无限连带责任、`R-CON-004` 违约金比例过高等。
+| 模块 | 主要职责 | 关键类 |
+| --- | --- | --- |
+| 文档入口 | 校验、去重、版本、解析、分块和原文读取 | `DocumentUploadService`, `DocumentParser`, `DocumentLocator` |
+| 审核工作流 | 运行互斥、取消、完成、失败、复核与批准 | `ReviewWorkflowService`, `ReviewStore` |
+| Agent 编排 | 受信任上下文、工具顺序、超时、错误和轨迹 | `ComplianceAgentOrchestrator`, `ToolRegistry` |
+| 确定性分析 | 规则、版本差异、实体、风险分数 | `ComplianceRuleEngine`, `ClauseComparisonService`, `EntityExtractor` |
+| 法规目录 | 带版本、日期、范围和来源的 DEMO 条目检索 | `RegulationCatalog` |
+| 整改 | 指派、证据、复审、关闭与重开 | `RemediationService` |
+| 报告 | 快照摘要、版本、幂等、DOCX、SHA-256 | `ReportService` |
+| 权限与审计 | Basic Auth 演示身份、RBAC、租户隔离、哈希链 | `SecurityConfig`, `ActorContext`, `AuditTrail` |
 
----
+## 8 个 Agent 工具
 
-## 5. 部署与扩展
+| 工具 | 输入驱动行为 | 主要输出 |
+| --- | --- | --- |
+| `check_rules` | 规则包 + 文档类型 + 当前正文 | 真实规则命中、证据 span、规则版本 |
+| `compare_clause` | 当前版本与父版本 | 新增、删除、修改和风险变化 |
+| `summarize_risks` | 当前运行已持久化 findings | 分数、等级和分类计数 |
+| `search_regulation` | 查询词、范围、日期、topK | 实际目录命中；零命中为空 |
+| `get_document_section` | chunk/页/章/段定位参数 | 对应原文和位置信息 |
+| `extract_entities` | 当前正文 | 主体、金额、日期、责任、续期等 span |
+| `generate_audit_report` | 已批准或可报告的审核快照 | 真实 DOCX 报告元数据 |
+| `create_remediation_task` | 已确认 finding、负责人和截止日 | 持久化且同 finding 幂等的任务 |
+
+每个工具提供 JSON schema、必填校验、最小角色、服务端超时、结构化错误和 `tool_execution` 审计。模型给出的文档 ID、正文、租户和操作者会被服务端上下文覆盖。
+
+## 状态机
+
+审核：
 
 ```text
-compliance-doc-agent/
-├── backend/
-│   └── src/main/java/com/portfolio/compliance/
-│       ├── agent/           # Orchestrator、Finding、AuditStreamCallbacks
-│       ├── agent/tool/      # ToolRegistry、AgentTool、ToolNames
-│       ├── rules/           # RuleEngine、ComplianceRule
-│       ├── llm/             # LlmClient、ToolSpec、Mock
-│       ├── service/         # Analysis + SSE Stream
-│       └── controller/      # REST + SSE 入口
-├── frontend/src/
-│   ├── api.ts               # REST + streamAudit SSE 客户端
-│   └── views/               # UploadView、ReportView
-└── docs/
-    ├── architecture.md      ← 本文件
-    └── ai-portfolio/project-07-spec.md
+CREATED -> RUNNING -> PENDING_REVIEW -> APPROVED
+                  \-> CANCELLED
+                  \-> FAILED
+PENDING_REVIEW -> REMEDIATION -> RECHECK -> APPROVED
+APPROVED/RECHECK -> REMEDIATION  (整改重开)
 ```
 
-| 扩展点 | 方式 |
+风险：
+
+```text
+OPEN -> FALSE_POSITIVE
+OPEN -> CONFIRMED -> REMEDIATION_REQUIRED -> RESOLVED
+```
+
+整改：
+
+```text
+OPEN/REOPENED/REJECTED -> IN_PROGRESS -> EVIDENCE_SUBMITTED
+EVIDENCE_SUBMITTED -> VERIFIED -> CLOSED -> REOPENED
+EVIDENCE_SUBMITTED -> REJECTED
+```
+
+状态更新带旧状态和版本号条件。冲突、重复或非法转换返回 HTTP `409`，不会靠前端隐藏按钮代替服务端校验。
+
+## 数据模型
+
+| 表 | 用途 |
 | --- | --- |
-| 新增规则 | 编辑 `default-rules.json` 或后续 CRUD API |
-| 新增工具 | 实现 `AgentTool` 接口并注册为 Spring `@Bean` |
-| 切换 LLM | 环境变量 `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` |
-| 真实法规检索 | 替换 `SearchRegulationTool` stub 为向量库 / ES 实现 |
+| `compliance_document` | 租户文档、格式、摘要、版本和解析状态 |
+| `compliance_document_chunk` | 原文分块及页/章/段位置 |
+| `compliance_check` | 兼容规则检查记录 |
+| `regulation_entry` | DEMO 法规/内规目录和版本有效期 |
+| `review_run` | 审核运行、规则版本、模型模式和状态 |
+| `risk_finding` | 风险、证据、位置、建议和人工结论 |
+| `finding_regulation` | 风险与实际法规命中的引用关系 |
+| `document_entity` | 实体类型、span、置信度和确认字段 |
+| `remediation_task` | 整改指派、状态、版本和复审意见 |
+| `remediation_evidence` | 脱敏整改证据 |
+| `audit_report` | 报告快照、版本、摘要和二进制内容 |
+| `tool_execution` | 工具输入摘要、结果、耗时和错误码 |
+| `audit_event` | 按租户前向哈希的业务审计事件 |
 
----
+H2 使用 `schema.sql` 幂等初始化，测试使用随机内存库；Compose 使用 named volume 中的文件库。生产数据库兼容性和迁移策略必须在目标环境单独验证。
 
-## 6. 相关文档
+## SSE 契约
 
-- [MVP 规格书](./ai-portfolio/project-07-spec.md) — 数据模型、API 清单、验收标准
-- [使用说明](./USAGE.md)
-- [README](../README.md) — 快速启动与 Docker Compose
+`POST /api/reviews/stream/{documentId}` 返回：
+
+```text
+start -> stage* -> tool* -> finding* -> narrative* -> summary -> done
+```
+
+终止分支为 `cancelled` 或 `error`。异步任务在提交前捕获不可变 `ActorContext`，不依赖线程本地安全上下文。Nginx 对 SSE 禁用缓冲。
+
+## 安全与报告边界
+
+- 除健康检查外所有 API 都需认证，资源查询执行服务端租户约束。
+- 系统管理员可跨租户运维，但读取行为额外审计。
+- DOCX 报告包含审核、风险、原文证据、法规引用、人工意见、整改和版本信息。
+- 报告哈希和审计链用于工程完整性检查，不等同于法定存证。
+- 内置法规为明确标注的 DEMO 数据，不是权威法规库。
+
+接口、使用、安全和部署细节分别见 [API.md](API.md)、[USAGE.md](USAGE.md)、[../SECURITY.md](../SECURITY.md) 和 [../DEPLOYMENT.md](../DEPLOYMENT.md)。

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { AuditFinding } from "./api";
-import { buildHighlightedHtml, buildMissingInsertions, collectHighlightSpans } from "./highlight";
+import {
+  buildHighlightedHtml,
+  buildMissingInsertions,
+  collectHighlightSpans,
+  type HighlightFinding,
+} from "./highlight";
 
-const findings: AuditFinding[] = [
+const findings: HighlightFinding[] = [
   {
     severity: "high",
     rule: "R-CON-003",
@@ -69,7 +73,7 @@ describe("buildHighlightedHtml", () => {
   });
 
   it("handles overlapping spans by advancing cursor", () => {
-    const overlap: AuditFinding[] = [
+    const overlap: HighlightFinding[] = [
       { severity: "high", rule: "A", description: "a", kind: "hit", matchStart: 5, matchEnd: 15 },
       { severity: "medium", rule: "B", description: "b", kind: "hit", matchStart: 10, matchEnd: 20 },
     ];

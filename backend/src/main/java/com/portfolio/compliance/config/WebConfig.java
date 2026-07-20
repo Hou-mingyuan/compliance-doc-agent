@@ -18,12 +18,9 @@ public class WebConfig implements WebMvcConfigurer {
         String origins = props.getCors().getAllowedOrigins();
         var mapping = registry.addMapping("/api/**")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
+                .allowedHeaders("Authorization", "Content-Type", "Accept", "Idempotency-Key", "X-Request-Id")
+                .exposedHeaders("X-Request-Id", "Content-Disposition")
                 .maxAge(3600);
-        if ("*".equals(origins)) {
-            mapping.allowedOriginPatterns("*");
-        } else {
-            mapping.allowedOrigins(origins.split(","));
-        }
+        mapping.allowedOrigins(origins.split(","));
     }
 }
