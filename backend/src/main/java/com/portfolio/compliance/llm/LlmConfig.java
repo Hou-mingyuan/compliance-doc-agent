@@ -21,7 +21,8 @@ public class LlmConfig {
             return new OpenAiLlmClient(cfg, objectMapper);
         }
         if ("openai".equalsIgnoreCase(cfg.getProvider())) {
-            log.warn("已选择 openai 但未配置 LLM_API_KEY，回退到离线 Mock 模型。");
+            log.error("已选择 openai 但未配置 LLM_API_KEY；LLM 叙事功能不可用，不回退 Mock。");
+            return new UnavailableLlmClient("openai", "已选择 OpenAI-compatible provider，但未配置 LLM_API_KEY");
         } else {
             log.info("LLM 供应方：mock（离线内置，无需密钥）");
         }

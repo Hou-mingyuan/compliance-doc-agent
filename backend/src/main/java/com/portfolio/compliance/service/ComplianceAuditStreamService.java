@@ -1,23 +1,24 @@
 package com.portfolio.compliance.service;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.compliance.agent.AuditStreamCallbacks;
 import com.portfolio.compliance.agent.ComplianceAgentOrchestrator;
+import com.portfolio.compliance.agent.ComplianceAgentOrchestrator.ReviewCancelledException;
+import com.portfolio.compliance.agent.tool.ToolResult;
 import com.portfolio.compliance.common.BizException;
-import com.portfolio.compliance.entity.ComplianceCheck;
-import com.portfolio.compliance.entity.ComplianceDocument;
-import com.portfolio.compliance.mapper.ComplianceCheckMapper;
-import com.portfolio.compliance.mapper.ComplianceDocumentMapper;
-import com.portfolio.compliance.rules.ComplianceRule;
-import com.portfolio.compliance.rules.RuleSeverity;
+import com.portfolio.compliance.security.ActorContext;
+import com.portfolio.compliance.security.ActorContextProvider;
+import com.portfolio.compliance.workflow.ReviewStore.FindingRecord;
+import com.portfolio.compliance.workflow.ReviewStore;
+import com.portfolio.compliance.workflow.ReviewWorkflowService;
+import com.portfolio.compliance.workflow.ReviewWorkflowService.StartedReview;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -26,153 +27,141 @@ public class ComplianceAuditStreamService {
 
     private static final Logger log = LoggerFactory.getLogger(ComplianceAuditStreamService.class);
 
-    private final ComplianceDocumentMapper documentMapper;
-    private final ComplianceCheckMapper checkMapper;
     private final ComplianceAgentOrchestrator orchestrator;
+    private final ReviewWorkflowService workflow;
+    private final ReviewStore reviews;
+    private final ActorContextProvider actors;
     private final ObjectMapper objectMapper;
+    private final ExecutorService executor;
 
     public ComplianceAuditStreamService(
-            ComplianceDocumentMapper documentMapper,
-            ComplianceCheckMapper checkMapper,
             ComplianceAgentOrchestrator orchestrator,
-            ObjectMapper objectMapper) {
-        this.documentMapper = documentMapper;
-        this.checkMapper = checkMapper;
+            ReviewWorkflowService workflow,
+            ReviewStore reviews,
+            ActorContextProvider actors,
+            ObjectMapper objectMapper,
+            @Qualifier("auditExecutor") ExecutorService executor) {
         this.orchestrator = orchestrator;
+        this.workflow = workflow;
+        this.reviews = reviews;
+        this.actors = actors;
         this.objectMapper = objectMapper;
+        this.executor = executor;
     }
 
     public SseEmitter streamAudit(Long docId) {
+        ActorContext actor = actors.current();
+        StartedReview started = workflow.begin(docId, actor);
+        ActorContext executionActor = started.executionActor();
+        String requestId = org.slf4j.MDC.get("requestId");
         SseEmitter emitter = new SseEmitter(120_000L);
-        CompletableFuture.runAsync(() -> runStream(docId, emitter));
+        emitter.onTimeout(() -> requestCancelQuietly(started, executionActor));
+        emitter.onError(error -> requestCancelQuietly(started, executionActor));
+        executor.submit(() -> runStream(started, executionActor, requestId, emitter));
         return emitter;
     }
 
-    private void runStream(Long docId, SseEmitter emitter) {
-        String auditId = UUID.randomUUID().toString();
+    private void runStream(StartedReview started, ActorContext actor, String requestId, SseEmitter emitter) {
         try {
-            ComplianceDocument doc = documentMapper.selectById(docId);
-            if (doc == null) {
-                sendEvent(emitter, "error", Map.of("message", "文档不存在：" + docId));
-                emitter.complete();
-                return;
-            }
-            if (doc.getContent() == null || doc.getContent().isBlank()) {
-                sendEvent(emitter, "error", Map.of("message", "文档内容为空，无法审核"));
-                emitter.complete();
-                return;
-            }
-
-            doc.setStatus("AUDITING");
-            doc.setUpdatedAt(LocalDateTime.now());
-            documentMapper.updateById(doc);
-
             sendEvent(emitter, "start", Map.of(
-                    "auditId", auditId,
-                    "documentId", String.valueOf(docId)));
-
-            List<ComplianceRule> ruleHits = new java.util.ArrayList<>();
-
-            String narrative = orchestrator.analyzeStream(doc.getTitle(), doc.getContent(), new com.portfolio.compliance.agent.AuditStreamCallbacks() {
+                    "reviewId", started.review().reviewKey(),
+                    "auditId", started.review().reviewKey(),
+                    "documentId", String.valueOf(started.document().getId())));
+            var outcome = orchestrator.runReview(started.review(), started.document(), actor, new AuditStreamCallbacks() {
                 @Override
-                public void onFinding(ComplianceRule rule) {
-                    ruleHits.add(rule);
-                    sendEvent(emitter, "finding", toFindingPayload(rule));
+                public void onFinding(FindingRecord finding) {
+                    sendEvent(emitter, "finding", findingPayload(finding));
                 }
 
                 @Override
                 public void onToken(String token) {
                     sendEvent(emitter, "narrative", Map.of("text", token));
                 }
+
+                @Override
+                public void onTool(String toolName, ToolResult result) {
+                    sendEvent(emitter, "tool", Map.of(
+                            "name", toolName,
+                            "ok", result.ok(),
+                            "code", result.code(),
+                            "summary", result.summary()));
+                }
+
+                @Override
+                public void onStage(String stage, String message) {
+                    sendEvent(emitter, "stage", Map.of("stage", stage, "message", message));
+                }
+
+                @Override
+                public boolean isCancelled() {
+                    return reviews.isCancelRequested(started.review().id());
+                }
             });
-
-            persistRuleHits(docId, ruleHits);
-
-            String summary = buildSummary(ruleHits, narrative);
-            sendEvent(emitter, "summary", Map.of("text", summary));
+            workflow.complete(started.review(), started.document(), outcome.riskSummary().riskScore(),
+                    outcome.riskSummary().summary(), actor);
+            sendEvent(emitter, "summary", Map.of(
+                    "text", outcome.riskSummary().summary(),
+                    "riskScore", outcome.riskSummary().riskScore(),
+                    "riskLevel", outcome.riskSummary().riskLevel().name()));
             sendEvent(emitter, "done", Map.of(
-                    "auditId", auditId,
-                    "summary", summary));
-
-            doc.setStatus("DONE");
-            doc.setUpdatedAt(LocalDateTime.now());
-            documentMapper.updateById(doc);
-
+                    "reviewId", started.review().reviewKey(),
+                    "auditId", started.review().reviewKey(),
+                    "summary", outcome.riskSummary().summary()));
             emitter.complete();
-        } catch (Exception e) {
-            log.error("SSE audit failed docId={}", docId, e);
-            try {
-                sendEvent(emitter, "error", Map.of("message", e.getMessage() == null ? "审核失败" : e.getMessage()));
-            } catch (Exception ignored) {
-                /* emitter may already be closed */
-            }
-            emitter.completeWithError(e);
+        } catch (ReviewCancelledException ex) {
+            workflow.markCancelled(started.review(), started.document(), actor);
+            sendEventQuietly(emitter, "cancelled", Map.of("reviewId", started.review().reviewKey()));
+            emitter.complete();
+        } catch (Exception ex) {
+            log.error("SSE audit failed reviewKey={} requestId={}", started.review().reviewKey(), requestId, ex);
+            workflow.fail(started.review(), started.document(), actor, ex instanceof BizException ? "BUSINESS" : "INTERNAL");
+            sendEventQuietly(emitter, "error", Map.of(
+                    "message", "审核失败，请重试",
+                    "requestId", requestId == null ? "n/a" : requestId));
+            emitter.complete();
         }
     }
 
-    private Map<String, Object> toFindingPayload(ComplianceRule rule) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("severity", mapSeverity(rule.severity()));
-        map.put("rule", rule.name());
-        map.put("description", rule.message());
-        map.put("location", rule.code());
-        boolean missing = rule.matchStart() != null && rule.matchStart() < 0;
-        map.put("kind", missing ? "missing" : "hit");
-        if (rule.matchedText() != null) {
-            map.put("matchedText", rule.matchedText());
-        }
-        if (rule.matchStart() != null && rule.matchStart() >= 0) {
-            map.put("matchStart", rule.matchStart());
-            map.put("matchEnd", rule.matchEnd());
-        }
-        return map;
+    private Map<String, Object> findingPayload(FindingRecord finding) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", finding.findingKey());
+        data.put("severity", finding.severity().name().toLowerCase());
+        data.put("rule", finding.title());
+        data.put("description", finding.description());
+        data.put("location", finding.ruleCode() == null ? finding.sourceType() : finding.ruleCode());
+        data.put("kind", finding.matchStart() == null ? "missing" : "hit");
+        data.put("matchedText", finding.evidenceText());
+        data.put("matchStart", finding.matchStart());
+        data.put("matchEnd", finding.matchEnd());
+        data.put("pageNo", finding.pageNo());
+        data.put("sectionTitle", finding.sectionTitle());
+        data.put("paragraphNo", finding.paragraphNo());
+        data.put("status", finding.status().name());
+        data.put("suggestion", finding.suggestion());
+        return data;
     }
 
-    private String mapSeverity(RuleSeverity severity) {
-        return switch (severity) {
-            case ERROR -> "high";
-            case WARNING -> "medium";
-            case INFO -> "info";
-        };
-    }
-
-    private String buildSummary(List<ComplianceRule> rules, String narrative) {
-        if (rules.isEmpty()) {
-            return "规则引擎未命中风险项。" + (narrative.isBlank() ? "" : " " + firstLine(narrative));
-        }
-        RuleSeverity max = RuleSeverity.INFO;
-        for (ComplianceRule r : rules) {
-            if (r.severity().ordinal() > max.ordinal()) {
-                max = r.severity();
-            }
-        }
-        return "共发现 %d 项风险（最高等级：%s）。".formatted(rules.size(), max.name());
-    }
-
-    private String firstLine(String text) {
-        int idx = text.indexOf('\n');
-        String line = idx >= 0 ? text.substring(0, idx) : text;
-        return line.length() > 120 ? line.substring(0, 120) + "…" : line;
-    }
-
-    private void persistRuleHits(Long documentId, List<ComplianceRule> rules) {
-        LocalDateTime now = LocalDateTime.now();
-        for (ComplianceRule rule : rules) {
-            ComplianceCheck check = new ComplianceCheck();
-            check.setDocumentId(documentId);
-            check.setRuleCode(rule.code());
-            check.setSeverity(rule.severity().name());
-            check.setMessage(rule.message());
-            check.setCreatedAt(now);
-            checkMapper.insert(check);
+    private void requestCancelQuietly(StartedReview started, ActorContext actor) {
+        try {
+            workflow.requestCancel(started.review().reviewKey(), actor);
+        } catch (Exception ignored) {
+            // Stream may already have reached a terminal state.
         }
     }
 
     private void sendEvent(SseEmitter emitter, String event, Map<String, Object> data) {
         try {
             emitter.send(SseEmitter.event().name(event).data(objectMapper.writeValueAsString(data)));
-        } catch (Exception e) {
-            throw new BizException(500, "SSE 推送失败：" + e.getMessage());
+        } catch (Exception ex) {
+            throw new ReviewCancelledException();
+        }
+    }
+
+    private void sendEventQuietly(SseEmitter emitter, String event, Map<String, Object> data) {
+        try {
+            sendEvent(emitter, event, data);
+        } catch (Exception ignored) {
+            // Client already disconnected.
         }
     }
 }

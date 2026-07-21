@@ -2,72 +2,75 @@
 
 ## Supported Versions
 
-**compliance-doc-agent** is actively maintained on the `main` branch. Security fixes target `main` first.
-
 | Version | Supported |
 | --- | --- |
-| Latest on `main` | Yes |
-| Older tags | Best effort |
+| 当前 `main` / `0.1.0` RC | Yes |
+| 更早标签 | Best effort |
 
 ## Reporting a Vulnerability
 
-Do **not** open a public issue with exploit details, credentials, API Key, or proof-of-concept code.
+优先使用仓库的 GitHub Private Vulnerability Reporting 或 Security Advisory。若不可用，只公开请求私密联系渠道，不要在公开 issue 中附带利用代码、密钥、原文档或个人信息。
 
-Preferred channels:
+报告应包含受影响版本、最小复现、影响和已脱敏日志中的 `X-Request-Id`。
 
-1. GitHub **Private vulnerability reporting** or a **Security Advisory** for this repository, if enabled.
-2. If private reporting is unavailable, open a public issue asking for a private contact channel **without** technical exploit details.
+## 当前安全模型
 
-Include affected version/commit, reproduction steps, impact, and relevant logs with secrets removed.
+默认环境是本地、脱敏、零密钥演示：
 
-## Scope
+- Spring Security 使用无状态 HTTP Basic；只有 `/api/health` 匿名可访问
+- 角色为 `USER`、`REVIEWER`、`COMPLIANCE_ADMIN`、`SYSTEM_ADMIN`
+- 文档、审核、风险、整改、报告和审计接口在服务端检查角色、租户及资源归属
+- 系统管理员的跨租户读取会写审计事件；普通角色不能指定其他租户
+- 默认 CORS 只允许 `localhost:19070` 和 `127.0.0.1:19070`
+- H2 Console 默认关闭，错误响应不回传堆栈、SQL、文件路径或供应商响应正文
 
-### In scope
+演示账户和 Basic Auth 只适用于回环地址。外部部署必须禁用演示身份并接入正式身份源，同时使用 HTTPS。
 
-- Spring Boot REST / SSE APIs (`/api/documents`, `/api/compliance/**`)
-- Document upload parsing (PDF / TXT / Markdown) and file size limits
-- Docker Compose deployment and default H2 credentials
-- LLM gateway configuration and secret handling (`LLM_API_KEY`)
-- Mock demo data leakage or misconfiguration in production
-- CORS defaults (`allowed-origins: *` in dev)
+## 上传与解析防护
 
-### Out of scope (current MVP)
+后端统一执行以下检查：
 
-- End-user / auditor RBAC and SSO (see README Roadmap Phase 3)
-- Multi-tenant data isolation
-- Third-party LLM provider security posture
-- Built-in regulation corpus authenticity (all sample rules/text are fictional)
+- 单文件最大 5MB，代理请求体上限 6MB
+- 只接受 TXT、Markdown、文本型 PDF 和 DOCX
+- 同时检查扩展名、文件签名和内容结构，不只信任浏览器 MIME
+- 拒绝加密 PDF、扫描/无文本 PDF、二进制伪装文本和损坏文件
+- DOCX 检查 ZIP 条目数量、单项大小、总解压大小、路径穿越和压缩比
+- 保存 SHA-256，用租户内摘要识别重复上传
+- 规则证据和实体中的身份证样例会脱敏后持久化和展示
+
+当前没有内置杀毒引擎或 OCR。外部部署必须在上传边界接入恶意文件扫描；扫描 PDF 会明确失败，不会被当作无风险审核成功。
+
+## 模型与 Prompt Injection
+
+- Mock LLM 只把确定性工具结果整理为说明，不生成或持久化 findings
+- 文档中的提示词、角色声明和工具参数都按不可信正文处理
+- `doc_id`、原文、租户和操作者由服务端上下文覆盖，模型不能指定受信任资源
+- 法规零命中返回空数组，不能由模型补写法规
+- 显式配置不可用的真实 provider 时返回诊断状态，不静默降级
+
+仓库内 `samples/prompt-injection-demo.txt` 和自动验收证明正文命令不会进入审核叙述。
+
+## 审计与完整性
+
+状态转换、人工判断、整改、工具执行、报告生成和系统管理员跨租户读取均写入 `audit_event`。每个租户的事件使用 SHA-256 前向哈希链，`GET /api/audit/verify` 可检测链内事件被改写。
+
+该机制是应用数据库内的篡改检测，不等同于第三方时间戳、电子签名、WORM 存储或法定存证。数据库管理员仍可重写整条链，因此外部部署需要独立备份和外部锚定策略。
 
 ## Secret Handling
 
-This project follows a **bring-your-own-key (BYOK)** model for real LLM usage:
+- `.env`、数据库文件、日志和上传文档均被 Git 忽略
+- `.env.example` 不包含真实密钥
+- 真实 `LLM_API_KEY` 应由秘密管理系统注入并定期轮换
+- 不在日志、审计详情、报告或前端状态中保存凭据
+- 最终交付运行 secret scan，命中样例密码或测试 token 时必须按允许清单逐项解释
 
-- Default `LLM_PROVIDER=mock` requires **no** API Key.
-- Never commit `.env`, `LLM_API_KEY`, or uploaded customer documents.
-- `config.json` / `.env.example` contain placeholders only.
+## 已知边界
 
-## Production Baseline
+当前发布候选版未内置：
 
-- **Mock LLM is for local demo / CI only** — disable in production unless intentionally isolated.
-- Override default H2 / MySQL credentials; do not expose H2 console (`/h2-console`) publicly.
-- Set `LLM_API_KEY` via secrets manager; rotate keys on staff turnover.
-- Place HTTPS termination, authentication, and rate limiting at a reverse proxy or API gateway.
-- Restrict upload MIME types and scan uploads for malware at the gateway layer.
-- Narrow CORS to known frontend origins in production.
-- Disable Spring H2 console in production profiles.
+- 企业 SSO、MFA、账户生命周期和密码重置
+- API 网关限流、WAF、杀毒、DLP 和对象存储隔离
+- 审计链外部锚定和密钥签名
+- 权威法规授权、法律效力认证或生产数据保留策略
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment hardening and [docs/USAGE.md](docs/USAGE.md) for safe local demo setup.
-
-## Document Upload Safety
-
-- MVP enforces single-file size limit (≤ 5MB) at the controller layer.
-- Parsed content is stored in H2/MySQL; treat the database as sensitive in production.
-- Sample files under `backend/src/main/resources/samples/` are fictional — do not use as real legal advice.
-
-## Audit Trail
-
-MVP persists audit events for workflow state changes. Production deployments should:
-
-- Restrict database access to application service accounts.
-- Back up audit tables with the same retention policy as source documents.
-- Plan RBAC before exposing the API beyond trusted networks (Roadmap Phase 3).
+这些是外部部署条件，不影响仓库内脱敏演示闭环，但禁止据此宣称系统替代律师或已完成法定认证。

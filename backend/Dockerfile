@@ -14,15 +14,15 @@ RUN apk add --no-cache curl \
     && addgroup -S app && adduser -S app -G app
 WORKDIR /app
 
-ENV SERVER_PORT=8080 \
+ENV SERVER_PORT=19071 \
     LLM_PROVIDER=mock \
     JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 
 COPY --from=build /app/target/compliance-doc-agent.jar app.jar
-RUN chown app:app app.jar
+RUN mkdir -p /data && chown app:app app.jar /data
 USER app
 
-EXPOSE 8080
+EXPOSE 19071
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=45s --retries=5 \
   CMD curl -fsS "http://127.0.0.1:${SERVER_PORT}/api/health" || exit 1

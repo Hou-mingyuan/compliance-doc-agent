@@ -1,255 +1,172 @@
-# 合规文档 AI 审核 Agent
+# Compliance Doc Agent
 
-> 面向内审 / 合规 / 法务场景的**文档智能审核系统**：**规则引擎硬校验** + **LLM 语义审查**双层把关，**Function Calling Agent** 自主调用法规检索、版本 diff、风险评分与报告生成，审核结论全链路留痕。一条 `docker compose` 命令即可拉起，**无需任何大模型密钥**也能完整体验 Mock 审核流程。
+证据可追溯、人工可复核、整改可闭环的合规文档审核工作台。当前版本为 `0.1.0` 发布候选版，默认使用脱敏样例、演示法规集和零密钥 Mock 文本模式。
 
-<p>
-  <img alt="CI" src="https://github.com/Hou-mingyuan/compliance-doc-agent/actions/workflows/ci.yml/badge.svg">
-  <img alt="java" src="https://img.shields.io/badge/Java-17-orange?logo=openjdk&logoColor=white">
-  <img alt="spring boot" src="https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white">
-  <img alt="rules" src="https://img.shields.io/badge/Rules%20Engine-YAML%20DSL-blue">
-  <img alt="agent" src="https://img.shields.io/badge/Agent-Function%20Calling-purple">
-  <img alt="vue" src="https://img.shields.io/badge/Vue-3-42b883?logo=vuedotjs&logoColor=white">
-  <img alt="license" src="https://img.shields.io/badge/License-MIT-green">
-</p>
+Mock 只整理真实工具输出，不生成风险项。风险项来自规则、法规检索、版本比较和实体分析的确定性结果，不使用固定 findings 冒充审核。
 
-> **当前状态**：`0.1.0` MVP 可运行 — Spring Boot 后端、Vue 审核工作台、Mock LLM、规则审查、SSE 流式报告与 Docker Compose 已就绪。完整设计见 [`docs/ai-portfolio/project-07-spec.md`](docs/ai-portfolio/project-07-spec.md)。
+## 一键启动
 
----
-
-## ✨ 项目亮点
-
-- **规则引擎 + LLM 双层审核，而非纯 ChatGPT 读文档**：YAML 规则 DSL（或 Drools）先行校验必备条款、数值阈值、禁限关键词；规则无法覆盖的语义风险交由 LLM + Function Calling 深度审查，结论可解释、可复核。
-- **8 个 Function Calling 工具**：已在 `ToolRegistry` 注册（**1 个接真实规则引擎** + **7 个结构化 Mock stub**），Agent 编排与 SSE 流式展示可用 — 详见下表「实现状态」。
-- **贴合内审合规场景**：合同 / 内控制度 / 信息披露等文档类型；审核工作流状态机（上传 → 机审 → 人工确认 → 整改闭环）；`audit_event` 全链路留痕。
-- **Mock 优先体验**：内置 Mock 法规库 + Mock LLM，无 API Key 可跑通「上传 → 规则命中 → 语义发现 → 报告预览」完整链路。
-- **可插拔多模型**：OpenAI 兼容接口，`DeepSeek / 通义 / Ollama` 环境变量一键切换。
-- **工程化落地**：清晰分层（controller / service / parser / rules / agent / llm），JUnit 覆盖上传、解析、规则命中与流式编排。
-
-## 🏗️ 系统架构
-
-```mermaid
-flowchart TB
-    subgraph FE["前端 (Vue3 + Vite)"]
-        Upload[文档上传]
-        Workbench[审核工作台]
-        Admin[法规 / 规则管理]
-        Report[报告导出]
-    end
-
-    subgraph BE["后端 (Spring Boot 3)"]
-        API[REST + SSE]
-        DOC[文档解析<br/>PDF / Word / Excel]
-        RULE[规则引擎<br/>YAML DSL / Drools]
-        AGENT[Agent 编排器]
-        TOOLS[Function Calling 工具集]
-        LLM[LLM 抽象层<br/>OpenAI 兼容 / Mock]
-        WF[审核工作流 / 状态机]
-    end
-
-    DB[(MySQL / H2)]
-    OSS[对象存储]
-    EXT[大模型网关]
-
-    Upload --> API --> DOC --> OSS
-    API --> RULE --> DB
-    API --> AGENT
-    AGENT --> TOOLS --> DB
-    AGENT --> LLM --> EXT
-    AGENT --> WF --> DB
-    Workbench -->|SSE| API
-```
-
-> 详细时序图、数据模型与 API 设计见 [`docs/ai-portfolio/project-07-spec.md`](../docs/ai-portfolio/project-07-spec.md)。
-
-## 🧰 技术栈
-
-| 层 | 选型 |
-| --- | --- |
-| 后端 | Java 17、Spring Boot 3.3、Spring MVC（SSE） |
-| 规则引擎 | YAML DSL（MVP）/ Drools 7.x（可选） |
-| 文档解析 | Apache PDFBox、TXT / Markdown / PDF |
-| Agent | 自研工具注册中心 + Function Calling 编排 |
-| 大模型 | OpenAI 兼容客户端（流式 + 工具调用）/ 内置 Mock |
-| 持久层 | MyBatis-Plus 3.5、MySQL 8（生产）/ H2（本地） |
-| 前端 | Vue 3、Vite、TypeScript |
-| 部署 | Docker、docker-compose |
-
-## 📁 目录结构
-
-```
-compliance-doc-agent/
-├── backend/                          # Spring Boot 3 后端
-│   ├── src/main/java/com/portfolio/compliance/
-│   │   ├── agent/          # SSE 审核编排与 Mock LLM 输出
-│   │   ├── controller/     # REST / SSE API
-│   │   ├── entity/mapper/  # H2 持久化与 MyBatis-Plus
-│   │   ├── llm/            # Mock / OpenAI 兼容配置
-│   │   ├── parser/         # 文档解析与分块
-│   │   └── rules/          # 规则引擎
-│   └── src/main/resources/samples/   # 内置演示文档
-├── frontend/                         # Vue3 审核工作台
-├── docs/
-│   ├── USAGE.md                      # 使用指南
-│   └── architecture.md               # 架构文档
-├── DEPLOYMENT.md                     # 部署与运维
-├── SECURITY.md                       # 安全策略
-├── PERFORMANCE_REPORT.md             # 压测报告
-├── performance/k6-smoke.js           # k6 只读 API smoke
-├── docker-compose.yml                # Docker Desktop 一键启动
-├── .env.example                      # 零密钥 Mock 默认配置
-├── VERSION
-├── CHANGELOG.md
-└── README.md
-```
-
-## 🚀 快速开始
-
-### Docker 一键启动（推荐）
+前置条件：Docker Desktop / Docker Engine 与 Compose v2。
 
 ```bash
-cd compliance-doc-agent
-cp .env.example .env        # 默认 Mock 模型即可体验
+copy .env.example .env
 docker compose up -d --build
 ```
 
-启动后：
+Linux/macOS 使用 `cp .env.example .env`。
 
-- 前端界面：http://localhost:5173
-- 后端接口：http://localhost:8080/api/health
+启动完成后：
 
-体验流程：
+- 工作台：<http://localhost:19070>
+- 后端健康：<http://localhost:19071/api/health>
+- 前端 `/api` 由 Nginx 反向代理到后端；SSE 已关闭代理缓冲。
 
-1. 上传 `backend/src/main/resources/samples/合同条款片段.txt` → 文档列表出现记录；
-2. 查看 LLM 语义审查产出的隐性风险建议；
-3. 点击「开始审核」→ 报告页通过 SSE 实时显示风险项、流式分析与摘要。
-
-详细步骤见下方 [演示指南](#演示指南) 与 [docs/USAGE.md](docs/USAGE.md)。部署运维见 [DEPLOYMENT.md](DEPLOYMENT.md)，安全策略见 [SECURITY.md](SECURITY.md)。
-
-## 演示指南
-
-面向作品集评审与首次体验。**本项目无需登录账号**；默认 Mock LLM 零密钥即可跑通完整审核链路。
-
-### 演示账号说明
-
-| 项目 | 说明 |
-| --- | --- |
-| 登录 / 演示账号 | **无** — MVP 未接入 RBAC，打开前端即可使用 |
-| 体验方式 | `cp .env.example .env` 后 `docker compose up -d --build`，保持 `LLM_PROVIDER=mock` |
-| 真实 LLM | 可选 BYOK：设置 `LLM_PROVIDER=openai` 与 `LLM_API_KEY` |
-
-### 核心演示流程
-
-| 步骤 | 操作 | 预期 |
-| --- | --- | --- |
-| 1 | 打开 http://localhost:5173 | 审核工作台加载 |
-| 2 | 上传 `backend/src/main/resources/samples/合同条款片段.txt` | 文档列表出现记录 |
-| 3 | 点击「开始审核」 | 跳转报告页，SSE 流式输出 |
-| 4 | 观察风险项 / 详细分析 / 摘要 | 命中 R-CON-001、R-PII-001 等规则；Mock LLM 流式 narrative |
-| 5 | 审核完成 | 显示报告 ID 与风险分布 |
-
-命令行等价验证见 [DEPLOYMENT.md §5](DEPLOYMENT.md#5-健康检查与-smoke)。
-
-### 验收命令
+检查状态：
 
 ```bash
-curl -f http://localhost:8080/api/health          # 含 "llmProvider":"mock"
-curl -f http://localhost:8080/api/documents       # 200
-cd backend && mvn -B test                         # JUnit 全绿
+docker compose ps
+curl http://localhost:19071/api/health
 ```
 
-压测基线见 [PERFORMANCE_REPORT.md](PERFORMANCE_REPORT.md) 与 `performance/k6-smoke.js`。
+停止服务但保留 H2 数据卷：
 
-### 本地开发
+```bash
+docker compose down
+```
+
+彻底删除演示数据：
+
+```bash
+docker compose down -v
+```
+
+## 演示账户
+
+| 身份 | 账户 | 密码 | 主要权限 |
+| --- | --- | --- | --- |
+| 业务用户 | `user@demo.local` | `demo-change-me` | 上传、发起审核、处理本人整改 |
+| 审核员 | `reviewer@demo.local` | `demo-change-me` | 人工判断、证据验收、批准、报告 |
+| 合规管理员 | `compliance@demo.local` | `demo-change-me` | 创建/关闭整改、法规检索、审计查看 |
+| 系统管理员 | `admin@demo.local` | `admin-change-me` | 跨租户运维视图，业务操作仍按资源租户审计 |
+| 租户 B 用户 | `tenant-b@demo.local` | `demo-change-me` | 用于验证跨租户隔离 |
+
+演示账户只用于本地脱敏环境。对外部署必须设置 `DEMO_AUTH_ENABLED=false` 并接入正式身份源。
+
+## 核心流程
+
+1. 使用业务用户上传 `samples/contract-v2-risky.txt`，选择“合同”。
+2. 发起审核，观察 SSE 阶段、8 个工具轨迹、原文命中和实体 span。
+3. 使用审核员逐条确认或驳回风险，并填写人工意见。
+4. 使用合规管理员为已确认风险创建整改任务。
+5. 业务用户开始任务并提交脱敏证据；审核员验收；合规管理员关闭。
+6. 审核员复审批准并生成 DOCX 报告。
+7. 在审计页校验租户内 SHA-256 前向哈希链。
+
+自动执行同一条完整链路：
+
+```bash
+python scripts/verify-complete.py --base http://127.0.0.1:19070
+```
+
+失败时脚本非零退出并写入 `docs/evidence/acceptance-failure.json`；成功时写入 `acceptance-latest.json` 与实际 DOCX。
+
+## 已实现能力
+
+| 能力 | 当前实现 |
+| --- | --- |
+| 文档解析 | TXT、Markdown、文本型 PDF、DOCX；5MB；签名/加密/二进制/ZIP 防护 |
+| 结构定位 | 页码、章节、段落、字符 span、chunk、SHA-256 |
+| 规则审核 | 版本化规则包、文档类型适用范围、包含/缺失规则、真实命中 |
+| 法规检索 | 数据库目录；版本、生效/失效日期、范围、来源；零命中返回空 |
+| 条款比较 | 文档版本的新增、删除、修改及规则风险变化 |
+| 实体抽取 | 主体、金额、日期、责任、自动续期、脱敏身份证；span 与置信度 |
+| 风险汇总 | 基于当前运行持久化 findings 计算初始分；人工结论单独留痕 |
+| 人工工作流 | 复核、误报、确认、整改、证据、复审、批准；非法转换拒绝 |
+| 权限与租户 | USER、REVIEWER、COMPLIANCE_ADMIN、SYSTEM_ADMIN；服务端租户过滤 |
+| 审计 | 请求主体、状态变化、工具调用、报告事件；数据库内 SHA-256 哈希链 |
+| 报告 | 基于审核快照生成 DOCX，版本化、幂等、SHA-256 下载校验 |
+
+### Agent 工具
+
+以下工具均有 JSON schema、必填校验、角色权限、超时、结构化错误和执行审计：
+
+- `check_rules`
+- `compare_clause`
+- `summarize_risks`
+- `search_regulation`
+- `get_document_section`
+- `extract_entities`
+- `generate_audit_report`
+- `create_remediation_task`
+
+LLM 不能指定受信任的 `doc_id`、正文、租户或操作者；编排器会用服务端上下文覆盖这些字段。
+
+## 格式与边界
+
+- 扫描 PDF 未实现 OCR，会明确拒绝，不会把空白文档标记为审核成功。
+- 内置法规是标有 `DEMO` 的脱敏工程样例，不是权威法规原文。
+- Mock 模式只组织工具摘要；接入 OpenAI-compatible 服务时也不允许模型直接持久化 findings。
+- 审计哈希链可检测数据库事件被改写，不等同于第三方时间戳、电子签名或法定存证。
+- 结果供具备职责的人员复核，不替代律师意见或法定认证。
+
+## 本地开发
+
+要求 Java 17+、Maven 3.9+、Node.js 22+。
+
+后端（`19071`）：
 
 ```bash
 cd backend
-mvn spring-boot:run           # 默认 H2 + Mock LLM，端口 8090
+mvn spring-boot:run
+```
 
+前端（`19070`，代理到 `19071`）：
+
+```bash
 cd frontend
-npm install && npm run dev    # http://localhost:5173，/api 代理到 8090
+npm ci
+npm run dev
 ```
 
-## ⚙️ 配置说明
+默认文件型 H2 位于 `backend/data/`，已被 Git 忽略。测试使用随机内存 H2。
 
-| 变量 | 说明 | 默认 |
-| --- | --- | --- |
-| `LLM_PROVIDER` | `mock` / `openai` | `mock` |
-| `LLM_BASE_URL` | OpenAI 兼容网关 | `https://api.openai.com/v1` |
-| `LLM_MODEL` | 模型名 | `gpt-4o-mini` |
-| `LLM_API_KEY` | 密钥（留空回退 Mock） | 空 |
-| `SPRING_DATASOURCE_URL` | H2 / MySQL JDBC URL | H2 内存库 |
-| `BACKEND_HOST_PORT` | Docker 后端宿主端口 | `8080` |
-| `FRONTEND_PORT` | Docker 前端宿主端口 | `5173` |
+## 质量命令
 
-## 🔌 API 概览（MVP）
+```bash
+cd backend
+mvn -B clean test
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/health` | 健康检查 |
-| GET | `/api/documents` | 已上传文档列表 |
-| POST | `/api/documents/upload` | 上传文档，触发审核流水线 |
-| POST | `/api/compliance/audit/stream/{docId}` | SSE：审核进度 + 风险项 + 摘要 |
-| POST | `/api/compliance/analyze` | JSON 文本分析备用接口 |
-
-## 🧠 Agent 工具一览
-
-> 工具名与 `ToolNames.java` / `ComplianceAgentToolStubs` 一致。**Round-7**：README 与代码实现对齐，明确 stub 与真实实现边界。
-
-| 工具名 | 用途 | 实现状态 | 关键参数 |
-| --- | --- | --- | --- |
-| `check_rules` | 规则包硬校验（真实引擎） | ✅ **真实** · `ComplianceRuleEngine` | `doc_content`, `rule_pack_id` |
-| `compare_clause` | 条款 / 版本 diff | 🔶 **Mock stub** · 结构化 findings | `doc_id`, `base_version`, `target_version` |
-| `summarize_risks` | 汇总风险评分 | 🔶 **Mock stub** | `doc_id`, `finding_ids` |
-| `search_regulation` | 检索法规 / 内规库 | 🔶 **Mock stub** | `keyword`, `category` |
-| `get_document_section` | 按章节 / 页码取原文 | 🔶 **Mock stub** | `doc_id`, `section_id` |
-| `extract_entities` | 抽取甲乙方、金额、日期等 | 🔶 **Mock stub** | `doc_id` |
-| `generate_audit_report` | 生成审核报告 | 🔶 **Mock stub** | `doc_id`, `format` |
-| `create_remediation_task` | 创建整改任务 | 🔶 **Mock stub** | `doc_id`, `finding_id`, `assignee` |
-
-**说明**：stub 工具在 Mock LLM / 零密钥演示下返回**固定结构**的 findings，便于 Agent 编排与 SSE 可视化验收；Phase 2 目标是将 🔶 项替换为真实检索 / 抽取 / 报告生成实现。
-
-## 📋 审核工作流
-
-```
-UPLOADED → PARSING → RULE_REVIEW → LLM_REVIEW → PENDING_CONFIRM
-    → APPROVED / REJECTED → REMEDIATION → 重新上传 → ARCHIVED
+cd ../frontend
+npm run lint
+npm run typecheck
+npm test -- --run
+npm run build
+npm audit --audit-level=high
 ```
 
-非法状态流转会被拒绝；每次变更写入 `audit_event` 满足内审留痕。
+性能脚本：
 
-## 🗺️ Roadmap
+```bash
+docker run --rm -e BASE_URL=http://host.docker.internal:19071 \
+  -v "$PWD:/work" grafana/k6:latest \
+  run /work/performance/k6-smoke.js
+```
 
-### Phase 1 — MVP
+实际指标、环境和失败基线见 [PERFORMANCE_REPORT.md](PERFORMANCE_REPORT.md)。
 
-- [x] 文档上传 + TXT / Markdown / PDF 解析 + 分块
-- [x] 规则引擎 + 内置规则
-- [x] Mock LLM 语义审查
-- [x] 审核工作台（上传列表 + SSE 报告）
-- [x] Docker Compose 一键启动
+## 文档
 
-### Phase 2 — Agent 增强（进行中 · Round-7 现状标注）
+- [架构](docs/architecture.md)
+- [API 与状态机](docs/API.md)
+- [使用手册](docs/USAGE.md)
+- [端到端验收](docs/E2E.md)
+- [部署与运维](DEPLOYMENT.md)
+- [安全说明](SECURITY.md)
+- [性能报告](PERFORMANCE_REPORT.md)
+- [变更日志](CHANGELOG.md)
 
-- [x] **8 个工具注册**到 `ToolRegistry`（`check_rules` 真实 · 其余 7 个 Mock stub）
-- [x] Agent 编排 + 审核 SSE 流式（Mock LLM 零密钥可演示）
-- [ ] 7 个 stub 工具替换为真实实现（法规检索 / 实体抽取 / 报告 PDF 等）
-- [ ] Agent 对话追问 UI（工具调用可视化 polish）
-- [ ] 接入真实 LLM（OpenAI 兼容，`LLM_API_KEY`）
+验收证据位于 `docs/evidence/`；真实浏览器截图和最终报告渲染位于 `output/playwright/final/`，其中 `output/` 为本地验收产物，不纳入版本控制。
 
-### Phase 3 — 生产化
+## 许可证
 
-- [ ] 法规库向量检索（对接 Enterprise RAG）
-- [ ] Drools 复杂规则 + RBAC 多租户
-- [ ] 整改任务闭环 + 看板统计
-
-## 🔗 相关项目
-
-| 项目 | 关系 |
-| --- | --- |
-| [AI Service Agent](../ai-service-agent/) | Agent 编排与 Function Calling 参考实现 |
-| [Enterprise RAG](../enterprise-rag/) | 法规知识库向量检索（可选集成） |
-| [AI Portfolio](../ai-portfolio/) | 作品集总览 |
-| [Project 07 规格书](../docs/ai-portfolio/project-07-spec.md) | 完整设计文档 |
-
-## 📄 许可证
-
-本项目基于 [MIT License](LICENSE) 开源。内置法规条文与样例文档均为虚构，仅用于演示。
+代码按 [MIT License](LICENSE) 发布。仓库内演示法规和样例仅用于工程测试，不得作为法律依据。

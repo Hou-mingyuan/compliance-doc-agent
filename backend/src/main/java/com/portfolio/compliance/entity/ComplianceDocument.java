@@ -13,10 +13,19 @@ public class ComplianceDocument {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    private String tenantId;
+    private String ownerId;
     private String title;
+    private String sourceFilename;
     private String docType;
+    private String fileFormat;
+    private String sha256;
     private String content;
+    private Integer pageCount;
+    private Integer versionNo;
+    private Long parentDocumentId;
     private String status;
+    private String parseError;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

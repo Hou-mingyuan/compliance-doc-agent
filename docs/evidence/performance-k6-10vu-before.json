@@ -1,0 +1,158 @@
+{
+    "metrics": {
+        "checks": {
+            "passes": 1725,
+            "fails": 0,
+            "thresholds": {
+                "rate==1": false
+            },
+            "value": 1
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 1150,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_req_sending": {
+            "min": 0.011123,
+            "med": 0.031712000000000004,
+            "max": 7.250221,
+            "p(90)": 0.0979441,
+            "p(95)": 0.12606859999999998,
+            "avg": 0.06270265391304349
+        },
+        "http_req_blocked": {
+            "min": 0.003577,
+            "med": 0.009976,
+            "max": 88.563499,
+            "p(90)": 0.013900000000000001,
+            "p(95)": 0.01864449999999999,
+            "avg": 0.595576111304348
+        },
+        "http_req_waiting": {
+            "p(95)": 370.0540291,
+            "avg": 159.0397996686954,
+            "min": 3.138202,
+            "med": 192.898443,
+            "max": 960.468193,
+            "p(90)": 325.99566080000005
+        },
+        "http_reqs": {
+            "count": 1150,
+            "rate": 37.698044121981624
+        },
+        "vus": {
+            "value": 10,
+            "min": 10,
+            "max": 10
+        },
+        "vus_max": {
+            "value": 10,
+            "min": 10,
+            "max": 10
+        },
+        "data_sent": {
+            "count": 143750,
+            "rate": 4712.255515247703
+        },
+        "http_req_duration": {
+            "avg": 161.82594354347816,
+            "min": 3.449265,
+            "med": 193.8645875,
+            "max": 960.678655,
+            "p(90)": 329.2337729000001,
+            "p(95)": 375.20731065
+        },
+        "iterations": {
+            "rate": 18.849022060990812,
+            "count": 575
+        },
+        "http_req_duration{type:read}": {
+            "avg": 161.82594354347816,
+            "min": 3.449265,
+            "med": 193.8645875,
+            "max": 960.678655,
+            "p(90)": 329.2337729000001,
+            "p(95)": 375.20731065,
+            "thresholds": {
+                "p(95)<300": true
+            }
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 161.82594354347816,
+            "min": 3.449265,
+            "med": 193.8645875,
+            "max": 960.678655,
+            "p(90)": 329.2337729000001,
+            "p(95)": 375.20731065
+        },
+        "http_req_receiving": {
+            "avg": 2.72344122086957,
+            "min": 0.050965,
+            "med": 0.29750449999999995,
+            "max": 108.453961,
+            "p(90)": 7.397890900000002,
+            "p(95)": 14.668526249999996
+        },
+        "http_req_connecting": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.42030072173913036,
+            "min": 0,
+            "med": 0,
+            "max": 88.44333
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "data_received": {
+            "count": 1559015,
+            "rate": 51105.927179853206
+        },
+        "iteration_duration": {
+            "avg": 527.124261097392,
+            "min": 389.703069,
+            "med": 507.101019,
+            "max": 1224.126595,
+            "p(90)": 628.2366666,
+            "p(95)": 690.131679
+        }
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "health ok": {
+                    "name": "health ok",
+                    "path": "::health ok",
+                    "id": "c42ae2f6b425daab202696e0780b9a01",
+                    "passes": 575,
+                    "fails": 0
+                },
+                "mock provider": {
+                    "passes": 575,
+                    "fails": 0,
+                    "name": "mock provider",
+                    "path": "::mock provider",
+                    "id": "213f5663f39022f7a25ff93da0f100b9"
+                },
+                "documents ok": {
+                    "name": "documents ok",
+                    "path": "::documents ok",
+                    "id": "a36ee36c0e261f8a71577e0458805b38",
+                    "passes": 575,
+                    "fails": 0
+                }
+            }
+    }
+}

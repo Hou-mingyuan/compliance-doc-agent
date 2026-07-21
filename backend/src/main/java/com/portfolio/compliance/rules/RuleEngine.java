@@ -18,13 +18,21 @@ public class RuleEngine implements ComplianceRuleEngine {
     private static final String EMPTY_CONTENT_CODE = "EMPTY_CONTENT";
 
     private final List<LoadedRule> rules;
+    private final String packVersion;
 
     public RuleEngine() {
-        this.rules = loadRules();
+        LoadedPack pack = loadRules();
+        this.rules = pack.rules();
+        this.packVersion = pack.version();
     }
 
     @Override
     public List<ComplianceRule> evaluate(String content) {
+        return evaluate(content, "CONTRACT");
+    }
+
+    @Override
+    public List<ComplianceRule> evaluate(String content, String documentType) {
         List<ComplianceRule> hits = new ArrayList<>();
         if (content == null || content.isBlank()) {
             hits.add(new ComplianceRule(
@@ -36,6 +44,9 @@ public class RuleEngine implements ComplianceRuleEngine {
         }
 
         for (LoadedRule rule : rules) {
+            if (!rule.appliesTo(documentType)) {
+                continue;
+            }
             MatchSpan span = rule.matchSpan(content);
             if (span != null) {
                 hits.add(new ComplianceRule(
@@ -56,14 +67,19 @@ public class RuleEngine implements ComplianceRuleEngine {
         return rules.size();
     }
 
-    private List<LoadedRule> loadRules() {
+    @Override
+    public String packVersion() {
+        return packVersion;
+    }
+
+    private LoadedPack loadRules() {
         try (InputStream in = new ClassPathResource(RULES_RESOURCE).getInputStream()) {
             DefaultRulesPack pack = new ObjectMapper().readValue(in, DefaultRulesPack.class);
             List<LoadedRule> loaded = new ArrayList<>();
             for (DefaultRulesPack.RuleDefinition def : pack.rules()) {
                 loaded.add(LoadedRule.from(def));
             }
-            return List.copyOf(loaded);
+            return new LoadedPack(pack.version(), List.copyOf(loaded));
         } catch (IOException e) {
             throw new IllegalStateException("无法加载内置规则包: " + RULES_RESOURCE, e);
         }
@@ -75,17 +91,30 @@ public class RuleEngine implements ComplianceRuleEngine {
             RuleSeverity severity,
             String message,
             Pattern pattern,
-            boolean missingKeyword) {
+            boolean missingKeyword,
+            List<String> documentTypes) {
 
         static LoadedRule from(DefaultRulesPack.RuleDefinition def) {
-            boolean missing = def.name() != null && def.name().contains("缺失");
+            boolean missing = "MISSING".equalsIgnoreCase(def.mode())
+                    || (def.mode() == null && def.name() != null && def.name().contains("缺失"));
             return new LoadedRule(
                     def.id(),
                     def.name(),
                     mapSeverity(def.severity()),
                     buildMessage(def.name(), missing),
                     Pattern.compile(def.pattern(), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-                    missing);
+                    missing,
+                    def.documentTypes() == null ? List.of() : def.documentTypes().stream()
+                            .map(v -> v.toUpperCase(java.util.Locale.ROOT))
+                            .toList());
+        }
+
+        boolean appliesTo(String documentType) {
+            if (documentTypes.isEmpty()) {
+                return true;
+            }
+            String normalized = documentType == null ? "GENERAL" : documentType.toUpperCase(java.util.Locale.ROOT);
+            return documentTypes.contains(normalized);
         }
 
         boolean matches(String content) {
@@ -123,5 +152,8 @@ public class RuleEngine implements ComplianceRuleEngine {
     }
 
     private record MatchSpan(int start, int end, String text) {
+    }
+
+    private record LoadedPack(String version, List<LoadedRule> rules) {
     }
 }

@@ -7,6 +7,14 @@ public interface LlmClient {
 
     String provider();
 
+    default boolean ready() {
+        return true;
+    }
+
+    default String diagnostic() {
+        return "ready";
+    }
+
     LlmChatResult chat(LlmChatRequest request);
 
     void chatStream(LlmChatRequest request, Consumer<String> onToken);

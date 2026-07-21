@@ -10,5 +10,9 @@ public record DocumentUploadResponse(
         String status,
         int contentLength,
         int chunkCount,
+        int pageCount,
+        int versionNo,
+        Long parentDocumentId,
+        boolean duplicate,
         LocalDateTime createdAt) {
 }

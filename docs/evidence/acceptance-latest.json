@@ -1,0 +1,202 @@
+{
+  "generatedAt": "2026-07-19T19:11:54.587968+00:00",
+  "baseUrl": "http://127.0.0.1:19071",
+  "mode": "zero-key-mock",
+  "health": {
+    "rulePackVersion": "1.0.0",
+    "demoAuth": true,
+    "llmProvider": "mock",
+    "status": "UP",
+    "ruleCount": 10,
+    "llmReady": true,
+    "llmDiagnostic": "ready"
+  },
+  "ruleEvaluation": {
+    "caseCount": 5,
+    "truePositive": 4,
+    "falsePositive": 0,
+    "falseNegative": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "scope": "内置规则包 + 仓库内 DEMO 法规集；不是法律准确率"
+  },
+  "cases": [
+    {
+      "file": "contract-v1-safe.txt",
+      "docType": "CONTRACT",
+      "documentId": 1,
+      "reviewKey": "REV-33E5210270A445DF",
+      "status": "PENDING_REVIEW",
+      "riskScore": 0,
+      "expectedRuleCodes": [],
+      "actualRuleCodes": [],
+      "citationCodes": [],
+      "entityTypes": [
+        "AMOUNT",
+        "DATE",
+        "RESPONSIBILITY",
+        "SUBJECT"
+      ],
+      "toolNames": [
+        "check_rules",
+        "extract_entities",
+        "summarize_risks"
+      ],
+      "locatedHitCount": 0
+    },
+    {
+      "file": "contract-v2-risky.txt",
+      "docType": "CONTRACT",
+      "documentId": 2,
+      "reviewKey": "REV-EDC69AA769364F40",
+      "status": "PENDING_REVIEW",
+      "riskScore": 25,
+      "expectedRuleCodes": [
+        "R-CON-003"
+      ],
+      "actualRuleCodes": [
+        "R-CON-003"
+      ],
+      "citationCodes": [
+        "DEMO-CONTRACT-LIABILITY-001"
+      ],
+      "entityTypes": [
+        "AMOUNT",
+        "AUTO_RENEWAL",
+        "DATE",
+        "RESPONSIBILITY",
+        "SUBJECT"
+      ],
+      "toolNames": [
+        "check_rules",
+        "compare_clause",
+        "extract_entities",
+        "get_document_section",
+        "search_regulation",
+        "summarize_risks"
+      ],
+      "locatedHitCount": 1
+    },
+    {
+      "file": "privacy-demo.md",
+      "docType": "PRIVACY",
+      "documentId": 3,
+      "reviewKey": "REV-FA2BF6D5A6884BEC",
+      "status": "PENDING_REVIEW",
+      "riskScore": 12,
+      "expectedRuleCodes": [
+        "R-PII-001"
+      ],
+      "actualRuleCodes": [
+        "R-PII-001"
+      ],
+      "citationCodes": [
+        "DEMO-PRIVACY-MINIMIZATION-001"
+      ],
+      "entityTypes": [
+        "PERSONAL_ID",
+        "RESPONSIBILITY"
+      ],
+      "toolNames": [
+        "check_rules",
+        "extract_entities",
+        "get_document_section",
+        "search_regulation",
+        "summarize_risks"
+      ],
+      "locatedHitCount": 1
+    },
+    {
+      "file": "policy-demo.md",
+      "docType": "POLICY",
+      "documentId": 4,
+      "reviewKey": "REV-DBAFE17AB3744AD4",
+      "status": "PENDING_REVIEW",
+      "riskScore": 12,
+      "expectedRuleCodes": [
+        "R-POL-001"
+      ],
+      "actualRuleCodes": [
+        "R-POL-001"
+      ],
+      "citationCodes": [
+        "DEMO-POLICY-PROCUREMENT-001"
+      ],
+      "entityTypes": [
+        "RESPONSIBILITY"
+      ],
+      "toolNames": [
+        "check_rules",
+        "extract_entities",
+        "search_regulation",
+        "summarize_risks"
+      ],
+      "locatedHitCount": 0
+    },
+    {
+      "file": "prompt-injection-demo.txt",
+      "docType": "GENERAL",
+      "documentId": 5,
+      "reviewKey": "REV-24217D647C5B4EF8",
+      "status": "PENDING_REVIEW",
+      "riskScore": 25,
+      "expectedRuleCodes": [
+        "R-CON-003"
+      ],
+      "actualRuleCodes": [
+        "R-CON-003"
+      ],
+      "citationCodes": [],
+      "entityTypes": [
+        "RESPONSIBILITY"
+      ],
+      "toolNames": [
+        "check_rules",
+        "extract_entities",
+        "get_document_section",
+        "search_regulation",
+        "summarize_risks"
+      ],
+      "locatedHitCount": 1
+    }
+  ],
+  "negativeChecks": {
+    "duplicateUpload": true,
+    "wrongPassword": "401",
+    "crossTenantRead": "403",
+    "userAuditRead": "403",
+    "regulationZeroHit": true
+  },
+  "cancellation": {
+    "documentId": 6,
+    "reviewKey": "REV-BCAB9ECF22324214",
+    "status": "CANCELLED"
+  },
+  "closedLoop": {
+    "reviewKey": "REV-EDC69AA769364F40",
+    "taskKey": "TASK-61EBA209BA9246A9",
+    "taskStatus": "CLOSED",
+    "reviewStatus": "APPROVED",
+    "report": {
+      "reportKey": "RPT-6EDCF5E910694B91",
+      "reviewId": 21,
+      "versionNo": 1,
+      "format": "docx",
+      "fileName": "contract-v2-risky-合规审核报告-v1.docx",
+      "sourceDigest": "c04ff5cf0aecbaf475fdb6930cbbfca8df5ef073b42f82c44196c4e6d7e65134",
+      "sha256": "b78fb59b66ea1c75b29b183d29d109febf79d26267305218a53a56a03a72daec",
+      "sizeBytes": 6120,
+      "createdBy": "reviewer@demo.local",
+      "createdAt": "2026-07-20T03:11:53.285262",
+      "downloadUrl": "/api/reports/RPT-6EDCF5E910694B91/download"
+    },
+    "reportPath": "docs\\evidence\\acceptance-report.docx",
+    "auditVerification": {
+      "valid": true,
+      "eventCount": 72,
+      "brokenAt": null,
+      "latestHash": "d865f9e142a776fd24fbc2710644a447606c45c5c00ee60cd39cf5874de730b5"
+    }
+  },
+  "elapsedSeconds": 20.006
+}

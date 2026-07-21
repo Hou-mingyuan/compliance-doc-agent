@@ -1,14 +1,21 @@
-import type { AuditFinding } from "./api";
+export interface HighlightFinding {
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  rule: string;
+  description: string;
+  kind?: "hit" | "missing";
+  matchStart?: number | null;
+  matchEnd?: number | null;
+}
 
 export interface HighlightSpan {
   start: number;
   end: number;
-  severity: AuditFinding["severity"];
+  severity: HighlightFinding["severity"];
   rule: string;
   kind: "hit" | "missing";
 }
 
-export function collectHighlightSpans(findings: AuditFinding[]): HighlightSpan[] {
+export function collectHighlightSpans(findings: HighlightFinding[]): HighlightSpan[] {
   return findings
     .filter((f) => f.matchStart != null && f.matchStart >= 0 && f.matchEnd != null && f.matchEnd > f.matchStart)
     .map((f) => ({
@@ -24,7 +31,7 @@ export function collectHighlightSpans(findings: AuditFinding[]): HighlightSpan[]
 /** 将文档正文转为带风险高亮的 HTML（已 escape，可 v-html） */
 export function buildHighlightedHtml(
   content: string,
-  findings: AuditFinding[],
+  findings: HighlightFinding[],
   activeIndex = -1,
   recentStart: number | null = null,
 ): string {
@@ -68,7 +75,7 @@ function renderHitSpans(
 }
 
 /** 缺失条款以 diff 插入行展示在正文末尾 */
-export function buildMissingInsertions(findings: AuditFinding[]): string {
+export function buildMissingInsertions(findings: HighlightFinding[]): string {
   const missing = findings.filter((f) => f.kind === "missing");
   if (!missing.length) return "";
   return missing

@@ -16,6 +16,8 @@ public record DefaultRulesPack(
             String id,
             String name,
             String severity,
+            String mode,
+            List<String> documentTypes,
             String pattern) {
     }
 }

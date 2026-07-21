@@ -8,13 +8,22 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class AppProperties {
 
     private Cors cors = new Cors();
+    private Security security = new Security();
     private Llm llm = new Llm();
     private Agent agent = new Agent();
     private Rules rules = new Rules();
 
     @Data
     public static class Cors {
-        private String allowedOrigins = "*";
+        private String allowedOrigins = "http://localhost:19070,http://127.0.0.1:19070";
+    }
+
+    @Data
+    public static class Security {
+        private boolean demoEnabled = true;
+        private int demoBcryptStrength = 8;
+        private String demoPassword = "demo-change-me";
+        private String adminPassword = "admin-change-me";
     }
 
     @Data
@@ -30,6 +39,7 @@ public class AppProperties {
     @Data
     public static class Agent {
         private String systemPrompt = "你是企业合规文档审查助手。";
+        private int toolTimeoutSeconds = 3;
     }
 
     @Data

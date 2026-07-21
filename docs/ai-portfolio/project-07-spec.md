@@ -1,4 +1,6 @@
-# Project 07 · 合规文档智能审核 Agent — MVP 规格书
+# Project 07 · 合规文档智能审核 Agent - 历史 MVP 规格书
+
+> **历史资料：** 本文保存 0.1.0 初始设计，不代表当前实现、端口、API、角色或发布范围。当前发布候选契约以仓库根目录 README、`docs/architecture.md`、`docs/API.md` 和自动验收证据为准。
 
 | 字段 | 内容 |
 | --- | --- |
@@ -296,7 +298,7 @@ cd backend && mvn test
 cd compliance-doc-agent
 cp .env.example .env    # 可选填 LLM_API_KEY
 docker compose up -d --build
-# 前端 http://localhost:8090 （端口待定，实现时写入 README）
+# 当前统一入口 http://localhost:19070；历史命令仅供设计追溯
 ```
 
 ---

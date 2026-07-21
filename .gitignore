@@ -23,6 +23,9 @@ dist/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+output/
+__pycache__/
+*.pyc
 npm-debug.log*
 yarn-error.log*
 pnpm-debug.log*
@@ -35,3 +38,5 @@ pnpm-debug.log*
 logs/
 .DS_Store
 Thumbs.db
+# Temporary local acceptance runtimes (never committed)
+.tools/
